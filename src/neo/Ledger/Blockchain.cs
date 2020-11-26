@@ -144,7 +144,7 @@ namespace Neo.Ledger
                 else
                 {
                     UpdateCurrentSnapshot();
-                    MemPool.InitSnapshot(currentSnapshot);
+                    MemPool.InitSnapshot(currentSnapshot.Clone());
                 }
                 singleton = this;
             }
@@ -475,7 +475,7 @@ namespace Neo.Ledger
             }
             UpdateCurrentSnapshot();
             block_cache.Remove(block.PrevHash);
-            MemPool.UpdatePoolForBlockPersisted(block, currentSnapshot);
+            MemPool.UpdatePoolForBlockPersisted(block, currentSnapshot.Clone());
             Context.System.EventStream.Publish(new PersistCompleted { Block = block });
         }
 

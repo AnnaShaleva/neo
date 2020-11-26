@@ -59,7 +59,7 @@ namespace Neo.Ledger
         // <summary>
         // Verified transactions are verified against this snapshot.
         // </summary>
-        private SnapshotView currentSnapshot;
+        private StoreView currentSnapshot;
 
         // Internal methods to aid in unit testing
         internal int SortedTxCount => _sortedTransactions.Count;
@@ -110,7 +110,7 @@ namespace Neo.Ledger
             Capacity = capacity;
         }
 
-        internal void InitSnapshot(SnapshotView snapshot)
+        internal void InitSnapshot(StoreView snapshot)
         {
             currentSnapshot = snapshot;
             LoadPolicy();
@@ -380,7 +380,7 @@ namespace Neo.Ledger
         }
 
         // Note: this must only be called from a single thread (the Blockchain actor)
-        internal void UpdatePoolForBlockPersisted(Block block, SnapshotView snapshot)
+        internal void UpdatePoolForBlockPersisted(Block block, StoreView snapshot)
         {
             bool policyChanged = false;
 
