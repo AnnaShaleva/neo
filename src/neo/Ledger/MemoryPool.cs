@@ -36,7 +36,6 @@ namespace Neo.Ledger
         ///       lock for write operations.
         /// </summary>
         private readonly ReaderWriterLockSlim _txRwLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
-        private readonly ReaderWriterLockSlim _snapshotLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 
         /// <summary>
         /// Store all verified unsorted transactions currently in the pool.
@@ -276,7 +275,7 @@ namespace Neo.Ledger
             List<Transaction> removedTransactions = null;
             VerifyResult result = VerifyResult.Succeed;
 
-            _snapshotLock.EnterReadLock();
+            _txRwLock.EnterUpgradeableReadLock();
             try
             {
                 if (currentSnapshot.ContainsTransaction(tx.Hash))
@@ -310,7 +309,7 @@ namespace Neo.Ledger
             }
             finally
             {
-                _snapshotLock.ExitReadLock();
+                _txRwLock.ExitUpgradeableReadLock();
             }
 
             foreach (IMemoryPoolTxObserverPlugin plugin in Plugin.TxObserverPlugins)
@@ -385,47 +384,39 @@ namespace Neo.Ledger
         {
             bool policyChanged = false;
 
-            _snapshotLock.EnterWriteLock();
+            _txRwLock.EnterWriteLock();
             try
             {
                 currentSnapshot = snapshot;
                 policyChanged = LoadPolicy();
 
-                _txRwLock.EnterWriteLock();
-                try
+                // First remove the transactions verified in the block.
+                foreach (Transaction tx in block.Transactions)
                 {
-                    // First remove the transactions verified in the block.
-                    foreach (Transaction tx in block.Transactions)
-                    {
-                        if (TryRemoveVerified(tx.Hash, out _)) continue;
-                        TryRemoveUnVerified(tx.Hash, out _);
-                    }
-
-                    // Add all the previously verified transactions back to the unverified transactions
-                    InvalidateVerifiedTransactions();
-
-                    if (policyChanged)
-                    {
-                        var tx = new List<Transaction>();
-                        foreach (PoolItem item in _unverifiedSortedTransactions.Reverse())
-                            if (item.Tx.FeePerByte >= _feePerByte)
-                                tx.Add(item.Tx);
-
-                        _unverifiedTransactions.Clear();
-                        _unverifiedSortedTransactions.Clear();
-
-                        if (tx.Count > 0)
-                            _system.TransactionRouter.Tell(tx.ToArray(), ActorRefs.NoSender);
-                    }
+                    if (TryRemoveVerified(tx.Hash, out _)) continue;
+                    TryRemoveUnVerified(tx.Hash, out _);
                 }
-                finally
+
+                // Add all the previously verified transactions back to the unverified transactions
+                InvalidateVerifiedTransactions();
+
+                if (policyChanged)
                 {
-                    _txRwLock.ExitWriteLock();
+                    var tx = new List<Transaction>();
+                    foreach (PoolItem item in _unverifiedSortedTransactions.Reverse())
+                        if (item.Tx.FeePerByte >= _feePerByte)
+                            tx.Add(item.Tx);
+
+                    _unverifiedTransactions.Clear();
+                    _unverifiedSortedTransactions.Clear();
+
+                    if (tx.Count > 0)
+                        _system.TransactionRouter.Tell(tx.ToArray(), ActorRefs.NoSender);
                 }
             }
             finally
             {
-                _snapshotLock.ExitWriteLock();
+                _txRwLock.ExitWriteLock();
             }
 
             // If we know about headers of future blocks, no point in verifying transactions from the unverified tx pool
