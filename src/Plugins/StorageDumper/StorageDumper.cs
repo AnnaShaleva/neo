@@ -28,7 +28,7 @@ namespace Neo.Plugins.StorageDumper
         /// <summary>
         /// _currentBlock stores the last cached item
         /// </summary>
-        private JObject? _currentBlock;
+        private JArray? _blocksCache;
         private string? _lastCreateDirectory;
         protected override UnhandledExceptionPolicy ExceptionPolicy => Settings.Default?.ExceptionPolicy ?? UnhandledExceptionPolicy.Ignore;
 
@@ -46,6 +46,11 @@ namespace Neo.Plugins.StorageDumper
         {
             Blockchain.Committing -= ((ICommittingHandler)this).Blockchain_Committing_Handler;
             Blockchain.Committed -= ((ICommittedHandler)this).Blockchain_Committed_Handler;
+            if (_writer != null)
+            {
+                _writer.Flush();
+                _writer.Dispose();
+            }
         }
 
         protected override void Configure()
@@ -138,15 +143,29 @@ namespace Neo.Plugins.StorageDumper
 
         void ICommittedHandler.Blockchain_Committed_Handler(NeoSystem system, Block block)
         {
-            OnCommitStorage(system.Settings.Network);
+            OnCommitStorage(system.Settings.Network, block);
         }
 
-        void OnCommitStorage(uint network)
+        void OnCommitStorage(uint network, Block block)
         {
-            if (_currentBlock != null && _writer != null)
+            if (_writer != null)
             {
-                _writer.WriteLine(_currentBlock.ToString());
-                _writer.Flush();
+                if (_currentBlock != null)
+                {
+                    _writer.WriteLine(_currentBlock.ToString());
+                    _writer.Flush();
+                }
+                if ((block.Index + 1) % Settings.Default!.BlockCacheSize == 0)
+                {
+                    _writer.Write("]");
+                    _writer.Flush();
+                    _writer.Close();
+                    _writer = null;
+                }
+                else
+                {
+                    
+                }
             }
         }
 
@@ -154,11 +173,11 @@ namespace Neo.Plugins.StorageDumper
         {
             uint blockIndex = NativeContract.Ledger.CurrentIndex(snapshot);
             if (_writer == null
-                || blockIndex % Settings.Default!.BlockCacheSize == 0)
+                || blockIndex == 0
+                || blockIndex % Settings.Default!.BlockCacheSize == 1)
             {
                 string path = GetOrCreateDirectory(network, blockIndex);
-                var filepart = (blockIndex / Settings.Default!.BlockCacheSize) * Settings.Default.BlockCacheSize;
-                path = $"{path}/dump-block-{filepart}.dump";
+                path = $"{path}/dump-block-{blockIndex}.json";
                 if (_writer != null)
                 {
                     _writer.Dispose();
@@ -180,7 +199,7 @@ namespace Neo.Plugins.StorageDumper
 
         private string GetDirectoryPath(uint network, uint blockIndex)
         {
-            uint folder = (blockIndex / Settings.Default!.StoragePerFolder) * Settings.Default.StoragePerFolder;
+            uint folder = blockIndex == 0 ? 0 : (((blockIndex - 1) / Settings.Default!.StoragePerFolder) + 1) * Settings.Default.StoragePerFolder;
             return $"./StorageDumper_{network}/BlockStorage_{folder}";
         }
 
