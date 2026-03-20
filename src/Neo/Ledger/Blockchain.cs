@@ -26,6 +26,7 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace Neo.Ledger
 {
@@ -95,6 +96,8 @@ namespace Neo.Ledger
         public static event CommittedHandler? Committed;
 
         private static readonly Script s_onPersistScript, s_postPersistScript;
+
+        private readonly System.IO.StreamWriter _rcLog;
         private const int MaxTxToReverifyPerIdle = 10;
         private readonly NeoSystem _system;
         private readonly Dictionary<UInt256, Block> _blockCache = [];
@@ -122,6 +125,7 @@ namespace Neo.Ledger
         public Blockchain(NeoSystem system)
         {
             _system = system;
+            _rcLog = new System.IO.StreamWriter($"./Logs_RC/rc_{system.Settings.Network}.txt", true);
         }
 
         private void OnImport(IEnumerable<Block> blocks, bool verify)
@@ -409,6 +413,7 @@ namespace Neo.Ledger
 
         private void Persist(Block block)
         {
+            var resBuilder = new StringBuilder();
             using (var snapshot = _system.GetSnapshotCache())
             {
                 var allApplicationExecuted = new List<ApplicationExecuted>();
@@ -437,7 +442,8 @@ namespace Neo.Ledger
                     var tx = transactionState.Transaction!;
                     using var engine = ApplicationEngine.Create(TriggerType.Application, tx, clonedSnapshot, block, _system.Settings, tx.SystemFee);
                     engine.LoadScript(tx.Script);
-                    transactionState.State = engine.Execute();
+                    var res = engine.ExecuteWithRC(false);
+                    transactionState.State = res.Item1;
                     if (transactionState.State == VMState.HALT)
                     {
                         clonedSnapshot.Commit();
@@ -446,6 +452,12 @@ namespace Neo.Ledger
                     {
                         clonedSnapshot = snapshot.CloneCache();
                     }
+                    resBuilder.AppendLine($"{tx.Hash.ToString()} {res.Item1.ToString()}");
+                    foreach (var i in res.Item2)
+                    {
+                        resBuilder.Append(i);
+                    }
+                    resBuilder.AppendLine();
 
                     var applicationExecuted = new ApplicationExecuted(engine);
                     Context.System.EventStream.Publish(applicationExecuted);
@@ -469,6 +481,9 @@ namespace Neo.Ledger
 
                 InvokeCommitting(_system, block, snapshot, allApplicationExecuted);
                 snapshot.Commit();
+                _rcLog.Write(resBuilder.ToString());
+                if (block.Index % 1000 == 0)
+                    _rcLog.Flush();
             }
 
             InvokeCommitted(_system, block);
