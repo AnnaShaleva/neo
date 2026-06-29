@@ -273,6 +273,100 @@ namespace Neo.UnitTests.Ledger
         }
 
         [TestMethod]
+        public async Task TestMemPoolNotaryFees()
+        {
+            var snapshot = GetSnapshot();
+            var funder = Contract.GetBFTAddress(TestProtocolSettings.Default.StandbyValidators);
+            var depositer = UInt160.Parse("01ff00ff00ff00ff00ff00ff00ff00ff00ff00a4");
+
+            var persistingBlock = new Block
+            {
+                Header = new Header
+                {
+                    PrevHash = UInt256.Zero,
+                    MerkleRoot = UInt256.Zero,
+                    Index = 1000,
+                    NextConsensus = UInt160.Zero,
+                    Witness = null!
+                },
+                Transactions = []
+            };
+
+            var storageKey = new KeyBuilder(NativeContract.Ledger.Id, 12);
+            snapshot.Add(storageKey, new StorageItem(new HashIndexState { Hash = UInt256.Zero, Index = persistingBlock.Index - 1 }));
+
+            var mintEngine = ApplicationEngine.Create(TriggerType.Application, null, snapshot, settings: TestProtocolSettings.Default, gas: long.MaxValue);
+            mintEngine.LoadScript(Array.Empty<byte>());
+            await NativeContract.GAS.Burn(mintEngine, depositer, NativeContract.GAS.BalanceOf(snapshot, depositer));
+            _ = NativeContract.GAS.Mint(mintEngine, depositer, 2_0000_0000, true);
+
+            var till = persistingBlock.Index + 500;
+            var depositData = new ContractParameter
+            {
+                Type = ContractParameterType.Array,
+                Value = new List<ContractParameter>()
+                {
+                    new() { Type = ContractParameterType.Hash160, Value = depositer },
+                    new() { Type = ContractParameterType.Integer, Value = till },
+                }
+            };
+            Assert.IsTrue(NativeContract.GAS.TransferWithTransaction(snapshot, funder.ToArray(), NativeContract.Notary.Hash.ToArray(), 6_0000_0000, true, persistingBlock, depositData));
+
+            Transaction createSponsored(long fee)
+            {
+                var tx = CreateTransactionWithFeeAndBalanceVerify(fee);
+                tx.Signers =
+                [
+                    new() { Account = NativeContract.Notary.Hash, Scopes = WitnessScope.None },
+                    new() { Account = depositer, Scopes = WitnessScope.None }
+                ];
+                tx.Witnesses = [Witness.Empty, Witness.Empty];
+                return tx;
+            }
+
+            Transaction createSimple(long fee)
+            {
+                var tx = CreateTransactionWithFeeAndBalanceVerify(fee);
+                tx.Signers = [new() { Account = depositer, Scopes = WitnessScope.None }];
+                tx.Witnesses = [Witness.Empty];
+                return tx;
+            }
+
+            var tx0 = createSponsored(6_0000_0000 + 1);
+            Assert.AreEqual(VerifyResult.InsufficientFunds, _unit.TryAdd(tx0, snapshot));
+            Assert.AreEqual(0, _unit.VerifiedCount);
+
+            var tx1 = createSponsored(2_0000_0000);
+            Assert.AreEqual(VerifyResult.Succeed, _unit.TryAdd(tx1, snapshot));
+            Assert.AreEqual(1, _unit.VerifiedCount);
+
+            var tx2 = createSponsored(3_0000_0000);
+            Assert.AreEqual(VerifyResult.Succeed, _unit.TryAdd(tx2, snapshot));
+            Assert.AreEqual(2, _unit.VerifiedCount);
+
+            var tx3 = createSponsored(2_0000_0000);
+            Assert.AreEqual(VerifyResult.InsufficientFunds, _unit.TryAdd(tx3, snapshot));
+            Assert.AreEqual(2, _unit.VerifiedCount);
+
+            var tx4 = createSimple(2_0000_0000);
+            Assert.AreEqual(VerifyResult.Succeed, _unit.TryAdd(tx4, snapshot));
+            Assert.AreEqual(3, _unit.VerifiedCount);
+
+            var tx5 = createSimple(1);
+            Assert.AreEqual(VerifyResult.InsufficientFunds, _unit.TryAdd(tx5, snapshot));
+            Assert.AreEqual(3, _unit.VerifiedCount);
+
+            var tx6 = createSponsored(3_0000_0000);
+            tx6.Attributes = [new Conflicts() { Hash = tx1.Hash }];
+            Assert.AreEqual(VerifyResult.Succeed, _unit.TryAdd(tx6, snapshot));
+            Assert.AreEqual(3, _unit.VerifiedCount);
+            Assert.IsFalse(_unit.ContainsKey(tx1.Hash));
+            Assert.IsTrue(_unit.ContainsKey(tx2.Hash));
+            Assert.IsTrue(_unit.ContainsKey(tx4.Hash));
+            Assert.IsTrue(_unit.ContainsKey(tx6.Hash));
+        }
+
+        [TestMethod]
         public async Task UpdatePoolForBlockPersisted_RemoveBlockConflicts()
         {
             // Arrange: prepare mempooled and in-bock txs conflicting with each other.
