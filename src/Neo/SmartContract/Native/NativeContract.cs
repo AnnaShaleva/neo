@@ -100,6 +100,8 @@ public abstract class NativeContract
 
     public static Governance Governance { get; } = new();
 
+    public static TemporaryStorage TemporaryStorage { get; } = new();
+
     #endregion
 
     /// <summary>
