@@ -21,8 +21,10 @@ using Neo.UnitTests.Extensions;
 using Neo.VM;
 using Neo.VM.Types;
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Numerics;
 
 namespace Neo.UnitTests.SmartContract.Native
@@ -31,7 +33,9 @@ namespace Neo.UnitTests.SmartContract.Native
     public class UT_TemporaryStorage
     {
         private const long TestGas = 1_000_000_000_000_000;
-        private const ulong MaxTtl = 7ul * 24 * 60 * 60 * 1000;
+        private const byte PrefixRecord = 0x01;
+        private const byte PrefixValidTill = 0x02;
+        private const int MaxCleanupBatchSize = 10_000;
         private DataCache _snapshotCache = null!;
 
         [TestInitialize]
@@ -44,6 +48,109 @@ namespace Neo.UnitTests.SmartContract.Native
         public void Check_Name()
         {
             Assert.AreEqual(nameof(TemporaryStorage), NativeContract.TemporaryStorage.Name);
+        }
+
+        [TestMethod]
+        public void Test_Put_ChargesGas_AndSupports64ByteKey()
+        {
+            var snapshot = _snapshotCache.CloneCache();
+            var caller = NativeContract.GAS.Hash;
+
+            var timePerBlock = (ulong)NativeContract.Policy.Call(snapshot, "getMillisecondsPerBlock").GetInteger();
+            ulong now = 1;
+            var persistingBlock = CreatePersistingBlock(snapshot, now);
+            ulong validTill = now + 3 * timePerBlock;
+            byte[] key = Enumerable.Range(1, ApplicationEngine.MaxStorageKeySize).Select(static i => (byte)i).ToArray();
+            byte[] value = [0x7B];
+
+            var (ret, gasConsumed) = CallFromContractWithGas(snapshot, persistingBlock, caller, "put",
+                new ContractParameter(ContractParameterType.ByteArray) { Value = key },
+                new ContractParameter(ContractParameterType.ByteArray) { Value = value },
+                new ContractParameter(ContractParameterType.Integer) { Value = (BigInteger)validTill });
+
+            Assert.IsInstanceOfType<Null>(ret);
+            Assert.IsGreaterThan(gasConsumed, 0L);
+
+            ret = CallFromContract(snapshot, persistingBlock, caller, "get",
+                new ContractParameter(ContractParameterType.ByteArray) { Value = key });
+            Assert.IsInstanceOfType<ByteString>(ret);
+            Assert.AreSequenceEqual(value, ret.GetSpan().ToArray());
+        }
+
+        [TestMethod]
+        public void Test_Find_Options_HideExpired()
+        {
+            var snapshot = _snapshotCache.CloneCache();
+            var caller = NativeContract.GAS.Hash;
+
+            var timePerBlock = (ulong)NativeContract.Policy.Call(snapshot, "getMillisecondsPerBlock").GetInteger();
+            ulong now = 1;
+            var putBlock = CreatePersistingBlock(snapshot, now);
+            byte[] key1 = [0xAA, 0x01];
+            byte[] key2 = [0xAA, 0x02];
+            byte[] key3 = [0xAA, 0x03];
+            byte[] value1 = [0x11];
+            byte[] value2 = [0x12];
+            byte[] value3 = [0x13];
+
+            _ = CallFromContract(snapshot, putBlock, caller, "put",
+                new ContractParameter(ContractParameterType.ByteArray) { Value = key1 },
+                new ContractParameter(ContractParameterType.ByteArray) { Value = value1 },
+                new ContractParameter(ContractParameterType.Integer) { Value = (BigInteger)(now + 2 * timePerBlock) });
+            _ = CallFromContract(snapshot, putBlock, caller, "put",
+                new ContractParameter(ContractParameterType.ByteArray) { Value = key2 },
+                new ContractParameter(ContractParameterType.ByteArray) { Value = value2 },
+                new ContractParameter(ContractParameterType.Integer) { Value = (BigInteger)(now + 5 * timePerBlock) });
+            _ = CallFromContract(snapshot, putBlock, caller, "put",
+                new ContractParameter(ContractParameterType.ByteArray) { Value = key3 },
+                new ContractParameter(ContractParameterType.ByteArray) { Value = value3 },
+                new ContractParameter(ContractParameterType.Integer) { Value = (BigInteger)(now + 6 * timePerBlock) });
+
+            var queryBlock = CreatePersistingBlock(snapshot, now + 3 * timePerBlock);
+            var values = FindByteStrings(snapshot, queryBlock, caller, [0xAA], FindOptions.ValuesOnly);
+            Assert.AreEqual(2, values.Count);
+            Assert.AreSequenceEqual(value2, values[0]);
+            Assert.AreSequenceEqual(value3, values[1]);
+
+            var keys = FindByteStrings(snapshot, queryBlock, caller, [0xAA],
+                FindOptions.KeysOnly | FindOptions.RemovePrefix | FindOptions.Backwards);
+            Assert.AreEqual(2, keys.Count);
+            Assert.AreSequenceEqual(new byte[] { 0x03 }, keys[0]);
+            Assert.AreSequenceEqual(new byte[] { 0x02 }, keys[1]);
+        }
+
+        [TestMethod]
+        public void Test_DeleteAndOverwrite_RemoveValidTillIndex()
+        {
+            var snapshot = _snapshotCache.CloneCache();
+            var caller = NativeContract.GAS.Hash;
+
+            var timePerBlock = (ulong)NativeContract.Policy.Call(snapshot, "getMillisecondsPerBlock").GetInteger();
+            ulong now = 1;
+            var persistingBlock = CreatePersistingBlock(snapshot, now);
+            byte[] key = [0xAB, 0xCD];
+            byte[] value1 = [0x01];
+            byte[] value2 = [0x02];
+            ulong validTill1 = now + 4 * timePerBlock;
+            ulong validTill2 = now + 5 * timePerBlock;
+
+            _ = CallFromContract(snapshot, persistingBlock, caller, "put",
+                new ContractParameter(ContractParameterType.ByteArray) { Value = key },
+                new ContractParameter(ContractParameterType.ByteArray) { Value = value1 },
+                new ContractParameter(ContractParameterType.Integer) { Value = (BigInteger)validTill1 });
+            Assert.IsNotNull(snapshot.TryGet(MakeValidTillStorageKey(validTill1, key)));
+
+            _ = CallFromContract(snapshot, persistingBlock, caller, "put",
+                new ContractParameter(ContractParameterType.ByteArray) { Value = key },
+                new ContractParameter(ContractParameterType.ByteArray) { Value = value2 },
+                new ContractParameter(ContractParameterType.Integer) { Value = (BigInteger)validTill2 });
+            Assert.IsNull(snapshot.TryGet(MakeValidTillStorageKey(validTill1, key)));
+            Assert.IsNotNull(snapshot.TryGet(MakeValidTillStorageKey(validTill2, key)));
+
+            _ = CallFromContract(snapshot, persistingBlock, caller, "delete",
+                new ContractParameter(ContractParameterType.ByteArray) { Value = key });
+            Assert.IsNull(snapshot.TryGet(MakeRecordStorageKey(key)));
+            Assert.IsNull(snapshot.TryGet(MakeValidTillStorageKey(validTill2, key)));
         }
 
         [TestMethod]
@@ -185,7 +292,6 @@ namespace Neo.UnitTests.SmartContract.Native
         public void Test_TempStoragePostPersist()
         {
             const int count = 10;
-            const byte prefixRecord = 0x01; // as declared in the contract.
             var snapshot = _snapshotCache.CloneCache();
             var caller = NativeContract.GAS.Hash;
 
@@ -194,13 +300,24 @@ namespace Neo.UnitTests.SmartContract.Native
             var persistingBlock = CreatePersistingBlock(snapshot, now);
             byte[] value = [0x01];
 
-            // Put values to the storage.
-            for (int i = 0; i < 3 * count; i++)
+            using (var sb = new ScriptBuilder())
             {
-                Assert.IsInstanceOfType<Null>(CallFromContract(snapshot, persistingBlock, caller, "put",
-                    new ContractParameter(ContractParameterType.ByteArray) { Value = new byte[] { (byte)i } },
-                    new ContractParameter(ContractParameterType.ByteArray) { Value = value },
-                    new ContractParameter(ContractParameterType.Integer) { Value = (BigInteger)now + 2 * timePerBlock + i }));
+                for (int i = 0; i < 3 * count; i++)
+                {
+                    sb.EmitDynamicCall(NativeContract.TemporaryStorage.Hash, "put",
+                        new ContractParameter(ContractParameterType.ByteArray) { Value = new byte[] { (byte)i } },
+                        new ContractParameter(ContractParameterType.ByteArray) { Value = value },
+                        new ContractParameter(ContractParameterType.Integer) { Value = (BigInteger)now + 2 * timePerBlock + i });
+                }
+
+                using var appEngine = ApplicationEngine.Create(TriggerType.Application, null, snapshot, persistingBlock, TestProtocolSettings.Default, TestGas);
+                appEngine.LoadScript(sb.ToArray());
+                var appState = appEngine.CurrentContext!.GetState<ExecutionContextState>();
+                appState.NativeCallingScriptHash = caller;
+                appState.ScriptHash = caller;
+                Assert.AreEqual(VMState.HALT, appEngine.Execute(), appEngine.FaultException?.ToString());
+                appEngine.SnapshotCache.Commit();
+                snapshot.Commit();
             }
 
             // Check all values are retrievable at the current timestamp.
@@ -217,7 +334,7 @@ namespace Neo.UnitTests.SmartContract.Native
             script.EmitSysCall(ApplicationEngine.System_Contract_NativePostPersist);
 
             persistingBlock = CreatePersistingBlock(snapshot, now + 2 * timePerBlock + 2 * count);
-            var engine = ApplicationEngine.Create(TriggerType.PostPersist, null, snapshot, persistingBlock, TestProtocolSettings.Default, TestGas);
+            using var engine = ApplicationEngine.Create(TriggerType.PostPersist, null, snapshot, persistingBlock, TestProtocolSettings.Default, TestGas);
             engine.LoadScript(script.ToArray());
             Assert.AreEqual(VMState.HALT, engine.Execute(), engine.FaultException?.ToString());
             engine.SnapshotCache.Commit();
@@ -230,9 +347,8 @@ namespace Neo.UnitTests.SmartContract.Native
                     new ContractParameter(ContractParameterType.ByteArray) { Value = new byte[] { (byte)i } }));
 
                 // Ensure the item is removed from the storage.
-                var key = new KeyBuilder(NativeContract.TemporaryStorage.Id, prefixRecord).AddLittleEndian(NativeContract.GAS.Id).Add([(byte)i]);
-                var entry = engine.SnapshotCache.TryGet(key);
-                Assert.IsNull(entry);
+                Assert.IsNull(snapshot.TryGet(MakeRecordStorageKey(new byte[] { (byte)i })));
+                Assert.IsNull(snapshot.TryGet(MakeValidTillStorageKey((ulong)now + 2 * timePerBlock + (ulong)i, new byte[] { (byte)i })));
             }
             // Ensure the rest 1/3 of items are still retrievable.
             for (int i = 2 * count; i < 3 * count; i++)
@@ -241,10 +357,71 @@ namespace Neo.UnitTests.SmartContract.Native
                     new ContractParameter(ContractParameterType.ByteArray) { Value = new byte[] { (byte)i } });
                 Assert.IsInstanceOfType<ByteString>(ret);
                 Assert.AreSequenceEqual(value, ret.GetSpan().ToArray());
+                Assert.IsNotNull(snapshot.TryGet(MakeValidTillStorageKey((ulong)now + 2 * timePerBlock + (ulong)i, new byte[] { (byte)i })));
             }
         }
 
+        [TestMethod]
+        public void Test_PostPersist_CleanupBatchCap_AndIndexCleanup()
+        {
+            const int staleCount = MaxCleanupBatchSize + 10;
+            const int freshCount = 5;
+            var snapshot = _snapshotCache.CloneCache();
+            var caller = NativeContract.GAS.Hash;
+            var timePerBlock = (ulong)NativeContract.Policy.Call(snapshot, "getMillisecondsPerBlock").GetInteger();
+            ulong now = 1;
+            ulong staleValidTill = now + 2 * timePerBlock;
+            ulong freshValidTill = now + 6 * timePerBlock;
+            byte[] value = [0x01];
+
+            for (int i = 0; i < staleCount; i++)
+                PutRawRecord(snapshot, BuildStaleKey(i), value, staleValidTill);
+            for (int i = 0; i < freshCount; i++)
+                PutRawRecord(snapshot, BuildFreshKey(i), value, freshValidTill);
+            snapshot.Commit();
+
+            using var script = new ScriptBuilder();
+            script.EmitSysCall(ApplicationEngine.System_Contract_NativePostPersist);
+            var postPersistBlock = CreatePersistingBlock(snapshot, staleValidTill + 1);
+            using var engine = ApplicationEngine.Create(TriggerType.PostPersist, null, snapshot, postPersistBlock, TestProtocolSettings.Default, TestGas);
+            engine.LoadScript(script.ToArray());
+            Assert.AreEqual(VMState.HALT, engine.Execute(), engine.FaultException?.ToString());
+            engine.SnapshotCache.Commit();
+            snapshot.Commit();
+
+            for (int i = 0; i < MaxCleanupBatchSize; i++)
+            {
+                var key = BuildStaleKey(i);
+                Assert.IsNull(snapshot.TryGet(MakeRecordStorageKey(key)));
+                Assert.IsNull(snapshot.TryGet(MakeValidTillStorageKey(staleValidTill, key)));
+            }
+            for (int i = MaxCleanupBatchSize; i < staleCount; i++)
+            {
+                var key = BuildStaleKey(i);
+                Assert.IsNotNull(snapshot.TryGet(MakeRecordStorageKey(key)));
+                Assert.IsNotNull(snapshot.TryGet(MakeValidTillStorageKey(staleValidTill, key)));
+            }
+            for (int i = 0; i < freshCount; i++)
+            {
+                var key = BuildFreshKey(i);
+                Assert.IsNotNull(snapshot.TryGet(MakeRecordStorageKey(key)));
+                Assert.IsNotNull(snapshot.TryGet(MakeValidTillStorageKey(freshValidTill, key)));
+            }
+
+            var sampleExpiredKey = BuildStaleKey(staleCount - 1);
+            Assert.IsInstanceOfType<Null>(CallFromContract(snapshot, postPersistBlock, caller, "get",
+                new ContractParameter(ContractParameterType.ByteArray) { Value = sampleExpiredKey }));
+
+            var values = FindByteStrings(snapshot, postPersistBlock, caller, [0xBA], FindOptions.ValuesOnly);
+            Assert.AreEqual(freshCount, values.Count);
+        }
+
         private static StackItem CallFromContract(DataCache snapshot, Block persistingBlock, UInt160 caller, string method, params ContractParameter[] args)
+        {
+            return CallFromContractWithGas(snapshot, persistingBlock, caller, method, args).Result;
+        }
+
+        private static (StackItem Result, long GasConsumed) CallFromContractWithGas(DataCache snapshot, Block persistingBlock, UInt160 caller, string method, params ContractParameter[] args)
         {
             using var engine = ApplicationEngine.Create(TriggerType.Application, null, snapshot, persistingBlock, TestProtocolSettings.Default, TestGas);
             using var sb = new ScriptBuilder();
@@ -265,7 +442,60 @@ namespace Neo.UnitTests.SmartContract.Native
 
             engine.SnapshotCache.Commit();
             snapshot.Commit(); // for further tests that rely on the same snapshot state.
-            return engine.ResultStack.Count > 0 ? engine.ResultStack.Pop() : StackItem.Null;
+            return (engine.ResultStack.Count > 0 ? engine.ResultStack.Pop() : StackItem.Null, engine.GasConsumed);
+        }
+
+        private static List<byte[]> FindByteStrings(DataCache snapshot, Block persistingBlock, UInt160 caller, byte[] prefix, FindOptions options)
+        {
+            using var sb = new ScriptBuilder().EmitDynamicCall(NativeContract.TemporaryStorage.Hash, "find",
+                new ContractParameter(ContractParameterType.ByteArray) { Value = prefix },
+                new ContractParameter(ContractParameterType.Integer) { Value = (BigInteger)(byte)options });
+            using var engine = ApplicationEngine.Create(TriggerType.Application, null, snapshot, persistingBlock, TestProtocolSettings.Default, TestGas);
+            engine.LoadScript(sb.ToArray());
+            var state = engine.CurrentContext!.GetState<ExecutionContextState>();
+            state.NativeCallingScriptHash = caller;
+            state.ScriptHash = caller;
+            Assert.AreEqual(VMState.HALT, engine.Execute(), engine.FaultException?.ToString());
+
+            Assert.IsInstanceOfType<InteropInterface>(engine.ResultStack[0]);
+            var iter = engine.ResultStack[0].GetInterface<object>() as StorageIterator;
+            Assert.IsNotNull(iter);
+
+            List<byte[]> values = [];
+            while (iter.Next())
+                values.Add(iter.Value().GetSpan().ToArray());
+
+            return values;
+        }
+
+        private static StorageKey MakeRecordStorageKey(byte[] key)
+        {
+            return new KeyBuilder(NativeContract.TemporaryStorage.Id, PrefixRecord).AddLittleEndian(NativeContract.GAS.Id).Add(key);
+        }
+
+        private static StorageKey MakeValidTillStorageKey(ulong validTill, byte[] key)
+        {
+            return new KeyBuilder(NativeContract.TemporaryStorage.Id, PrefixValidTill).AddBigEndian(validTill).AddLittleEndian(NativeContract.GAS.Id).Add(key);
+        }
+
+        private static void PutRawRecord(DataCache snapshot, byte[] key, byte[] value, ulong validTill)
+        {
+            var recordValue = new byte[8 + value.Length];
+            BinaryPrimitives.WriteUInt64BigEndian(recordValue, validTill);
+            value.AsSpan().CopyTo(recordValue.AsSpan(8));
+
+            snapshot.GetAndChange(MakeRecordStorageKey(key), () => new StorageItem())!.Value = recordValue;
+            snapshot.GetAndChange(MakeValidTillStorageKey(validTill, key), () => new StorageItem([]));
+        }
+
+        private static byte[] BuildStaleKey(int index)
+        {
+            return [(byte)0xAA, (byte)(index >> 8), (byte)index];
+        }
+
+        private static byte[] BuildFreshKey(int index)
+        {
+            return [(byte)0xBA, (byte)index];
         }
 
         private static Block CreatePersistingBlock(DataCache snapshot, ulong timestamp)

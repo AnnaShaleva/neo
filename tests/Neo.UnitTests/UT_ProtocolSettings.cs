@@ -11,6 +11,7 @@
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.Cryptography.ECC;
+using Neo.SmartContract.Native;
 using Neo.Wallets;
 using System;
 using System.IO;
@@ -371,6 +372,47 @@ namespace Neo.UnitTests
 
             // If StandbyValidators is a derived property, comparing it as well
             Assert.AreSequenceEqual(TestProtocolSettings.Default.StandbyValidators.ToList(), loadedSetting.StandbyValidators.ToList());
+        }
+
+        [TestMethod]
+        public void TestLoad_Throws_WhenTemporaryStorageMaxTTLTooLow()
+        {
+            var json = CreateProtocolSettingsWithTemporaryStorageMaxTTL(15_000, 0);
+            var file = Path.GetTempFileName();
+            File.WriteAllText(file, json);
+
+            try
+            {
+                Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => _ = ProtocolSettings.Load(file));
+            }
+            finally
+            {
+                File.Delete(file);
+            }
+        }
+
+        [TestMethod]
+        public void TestLoad_Throws_WhenTemporaryStorageMaxTTLTooHigh()
+        {
+            var json = CreateProtocolSettingsWithTemporaryStorageMaxTTL(15_000, PolicyContract.MaxTemporaryStorageMaxTTL + 1);
+            var file = Path.GetTempFileName();
+            File.WriteAllText(file, json);
+
+            try
+            {
+                Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => _ = ProtocolSettings.Load(file));
+            }
+            finally
+            {
+                File.Delete(file);
+            }
+        }
+
+        private static string CreateProtocolSettingsWithTemporaryStorageMaxTTL(uint millisecondsPerBlock, ulong temporaryStorageMaxTTL)
+        {
+            return CreateHFSettings("")
+                .Replace("\"MillisecondsPerBlock\": 15000,", $"\"MillisecondsPerBlock\": {millisecondsPerBlock},")
+                .Replace("\"MaxTraceableBlocks\": 2102400,", $"\"MaxTraceableBlocks\": 2102400,\n                \"TemporaryStorageMaxTTL\": {temporaryStorageMaxTTL},");
         }
     }
 }

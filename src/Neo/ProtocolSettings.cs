@@ -12,6 +12,7 @@
 using Microsoft.Extensions.Configuration;
 using Neo.Cryptography.ECC;
 using Neo.Network.P2P.Payloads;
+using Neo.SmartContract.Native;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -213,6 +214,10 @@ namespace Neo
         /// <returns>The loaded <see cref="ProtocolSettings"/>.</returns>
         public static ProtocolSettings Load(IConfigurationSection section)
         {
+            var millisecondsPerBlock = section.GetValue("MillisecondsPerBlock", Default.MillisecondsPerBlock);
+            var temporaryStorageMaxTTL = section.GetValue("TemporaryStorageMaxTTL", Default.TemporaryStorageMaxTTL);
+            ValidateTemporaryStorageMaxTTL(millisecondsPerBlock, temporaryStorageMaxTTL);
+
             Custom = new ProtocolSettings
             {
                 Network = section.GetValue("Network", Default.Network),
@@ -224,12 +229,12 @@ namespace Neo
                 SeedList = section.GetSection("SeedList").Exists()
                     ? section.GetSection("SeedList").GetChildren().Select(p => p.Get<string>()!).ToArray()
                     : Default.SeedList,
-                MillisecondsPerBlock = section.GetValue("MillisecondsPerBlock", Default.MillisecondsPerBlock),
+                MillisecondsPerBlock = millisecondsPerBlock,
                 MaxTransactionsPerBlock = section.GetValue("MaxTransactionsPerBlock", Default.MaxTransactionsPerBlock),
                 MemoryPoolMaxTransactions = section.GetValue("MemoryPoolMaxTransactions", Default.MemoryPoolMaxTransactions),
                 MaxTraceableBlocks = section.GetValue("MaxTraceableBlocks", Default.MaxTraceableBlocks),
                 MaxValidUntilBlockIncrement = section.GetValue("MaxValidUntilBlockIncrement", Default.MaxValidUntilBlockIncrement),
-                TemporaryStorageMaxTTL = section.GetValue("TemporaryStorageMaxTTL", Default.TemporaryStorageMaxTTL),
+                TemporaryStorageMaxTTL = temporaryStorageMaxTTL,
                 InitialGasDistribution = section.GetValue("InitialGasDistribution", Default.InitialGasDistribution),
                 Hardforks = section.GetSection("Hardforks").Exists()
                     ? EnsureOmmitedHardforks(section.GetSection("Hardforks").GetChildren().ToDictionary(p => Enum.Parse<Hardfork>(p.Key, true), p => uint.Parse(p.Value!))).ToImmutableDictionary()
@@ -237,6 +242,13 @@ namespace Neo
             };
             CheckingHardfork(Custom);
             return Custom;
+        }
+
+        private static void ValidateTemporaryStorageMaxTTL(uint millisecondsPerBlock, ulong temporaryStorageMaxTTL)
+        {
+            ulong lowerBound = checked(2UL * millisecondsPerBlock);
+            if (temporaryStorageMaxTTL < lowerBound || temporaryStorageMaxTTL > PolicyContract.MaxTemporaryStorageMaxTTL)
+                throw new ArgumentOutOfRangeException(nameof(temporaryStorageMaxTTL), $"TemporaryStorageMaxTTL must be between [{lowerBound}, {PolicyContract.MaxTemporaryStorageMaxTTL}], got {temporaryStorageMaxTTL}");
         }
 
         /// <summary>

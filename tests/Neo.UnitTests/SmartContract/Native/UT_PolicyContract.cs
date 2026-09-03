@@ -896,6 +896,12 @@ namespace Neo.UnitTests.SmartContract.Native
                 "setTemporaryStorageMaxTTL", new ContractParameter(ContractParameterType.Integer) { Value = 1 });
             });
 
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            {
+                NativeContract.Policy.Call(snapshot, new Nep17NativeContractExtensions.ManualWitness(committeeMultiSigAddr), block,
+                "setTemporaryStorageMaxTTL", new ContractParameter(ContractParameterType.Integer) { Value = PolicyContract.MaxTemporaryStorageMaxTTL + 1 });
+            });
+
             // With signature.
             ret = NativeContract.Policy.Call(snapshot, new Nep17NativeContractExtensions.ManualWitness(committeeMultiSigAddr), block,
                 "setTemporaryStorageMaxTTL", new ContractParameter(ContractParameterType.Integer) { Value = 30_000 });
