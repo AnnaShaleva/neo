@@ -475,6 +475,58 @@ public class UT_PolicyContract
     }
 
     [TestMethod]
+    public void TestWhiteListFeeCallerOpCodePricing_PostHuyaoRegression()
+    {
+        var snapshotCache = _snapshotCache.CloneCache();
+
+        var calleeScript = new byte[] { (byte)OpCode.RET };
+        var calleeContract = TestUtils.GetContract(calleeScript, TestUtils.CreateManifest("foo", ContractParameterType.Void));
+        snapshotCache.DeleteContract(calleeContract.Hash);
+        snapshotCache.AddContract(calleeContract.Hash, calleeContract);
+
+        using (var setupEngine = CreateEngineWithCommitteeSigner(snapshotCache))
+        {
+            NativeContract.Policy.SetWhitelistFeeContract(setupEngine, calleeContract.Hash, "foo", 0, 0);
+            setupEngine.SnapshotCache.Commit();
+        }
+
+        var callerScript = new byte[] { (byte)OpCode.CALLT, 0x00, 0x00, (byte)OpCode.RET };
+        var callerNef = new NefFile
+        {
+            Compiler = string.Empty,
+            Source = string.Empty,
+            Tokens =
+            [
+                new MethodToken
+                {
+                    Hash = calleeContract.Hash,
+                    Method = "foo",
+                    ParametersCount = 0,
+                    HasReturnValue = false,
+                    CallFlags = CallFlags.All
+                }
+            ],
+            Script = callerScript
+        };
+        callerNef.CheckSum = NefFile.ComputeChecksum(callerNef);
+
+        var callerContract = new ContractState
+        {
+            Id = 123,
+            Hash = callerScript.ToScriptHash(),
+            Nef = callerNef,
+            Manifest = TestUtils.CreateManifest("main", ContractParameterType.Void)
+        };
+
+        using var engine = ApplicationEngine.Create(TriggerType.Application, null, snapshotCache, settings: TestProtocolSettings.Default);
+        engine.LoadContract(callerContract, callerContract.Manifest.Abi.GetMethod("main", 0)!, CallFlags.All);
+
+        Assert.AreEqual(VMState.HALT, engine.Execute());
+        Assert.AreEqual(0, engine.ResultStack.Count);
+        Assert.AreEqual((long)NativeContract.Policy.GetExecFeeFactor(snapshotCache) * ApplicationEngine.OpCodePriceTable[(byte)OpCode.CALLT], engine.FeeConsumed);
+    }
+
+    [TestMethod]
     public void TestSetWhiteListFeeContractNegativeFixedFee()
     {
         var snapshotCache = _snapshotCache.CloneCache();
