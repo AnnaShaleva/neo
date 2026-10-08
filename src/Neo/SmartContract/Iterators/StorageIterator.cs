@@ -11,54 +11,57 @@
 
 using Neo.VM;
 using Neo.VM.Types;
+using System;
+using System.Collections.Generic;
 using Array = Neo.VM.Types.Array;
 
-namespace Neo.SmartContract.Iterators;
-
-internal class StorageIterator : IIterator
+namespace Neo.SmartContract.Iterators
 {
-    private readonly IEnumerator<(StorageKey Key, StorageItem Value)> enumerator;
-    private readonly int prefixLength;
-    private readonly FindOptions options;
-
-    public StorageIterator(IEnumerator<(StorageKey, StorageItem)> enumerator, int prefixLength, FindOptions options)
+    internal class StorageIterator : IIterator
     {
-        this.enumerator = enumerator;
-        this.prefixLength = prefixLength;
-        this.options = options;
-    }
+        private readonly IEnumerator<(StorageKey Key, StorageItem Value)> enumerator;
+        private readonly int prefixLength;
+        private readonly FindOptions options;
 
-    public void Dispose()
-    {
-        enumerator.Dispose();
-    }
+        public StorageIterator(IEnumerator<(StorageKey, StorageItem)> enumerator, int prefixLength, FindOptions options)
+        {
+            this.enumerator = enumerator;
+            this.prefixLength = prefixLength;
+            this.options = options;
+        }
 
-    public bool Next()
-    {
-        return enumerator.MoveNext();
-    }
+        public void Dispose()
+        {
+            enumerator.Dispose();
+        }
 
-    public StackItem Value(IReferenceCounter? referenceCounter)
-    {
-        ReadOnlyMemory<byte> key = enumerator.Current.Key.Key;
-        ReadOnlyMemory<byte> value = enumerator.Current.Value.Value;
+        public bool Next()
+        {
+            return enumerator.MoveNext();
+        }
 
-        if (options.HasFlag(FindOptions.RemovePrefix))
-            key = key[prefixLength..];
+        public StackItem Value()
+        {
+            ReadOnlyMemory<byte> key = enumerator.Current.Key.Key;
+            ReadOnlyMemory<byte> value = enumerator.Current.Value.Value;
 
-        StackItem item = options.HasFlag(FindOptions.DeserializeValues)
-            ? BinarySerializer.Deserialize(value, ExecutionEngineLimits.Default, referenceCounter)
-            : value;
+            if (options.HasFlag(FindOptions.RemovePrefix))
+                key = key[prefixLength..];
 
-        if (options.HasFlag(FindOptions.PickField0))
-            item = ((Array)item)[0];
-        else if (options.HasFlag(FindOptions.PickField1))
-            item = ((Array)item)[1];
+            StackItem item = options.HasFlag(FindOptions.DeserializeValues)
+                ? BinarySerializer.Deserialize(value, ExecutionEngineLimits.Default)
+                : value;
 
-        if (options.HasFlag(FindOptions.KeysOnly))
-            return key;
-        if (options.HasFlag(FindOptions.ValuesOnly))
-            return item;
-        return new Struct(referenceCounter) { key, item };
+            if (options.HasFlag(FindOptions.PickField0))
+                item = ((Array)item)[0];
+            else if (options.HasFlag(FindOptions.PickField1))
+                item = ((Array)item)[1];
+
+            if (options.HasFlag(FindOptions.KeysOnly))
+                return key;
+            if (options.HasFlag(FindOptions.ValuesOnly))
+                return item;
+            return new Struct() { key, item };
+        }
     }
 }

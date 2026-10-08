@@ -9,43 +9,87 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.Extensions;
-using Neo.Extensions.Collections;
-using Neo.Extensions.IO;
 using Neo.Network.P2P.Capabilities;
 using Neo.Network.P2P.Payloads;
+using System;
+using System.Linq;
 
-namespace Neo.UnitTests.Network.P2P.Payloads;
-
-[TestClass]
-public class UT_VersionPayload
+namespace Neo.UnitTests.Network.P2P.Payloads
 {
-    [TestMethod]
-    public void SizeAndEndPoint_Get()
+    [TestClass]
+    public class UT_VersionPayload
     {
-        var test = VersionPayload.Create(ProtocolSettings.Default, new(), "neo3");
-        Assert.AreEqual(148, test.Size);
+        [TestMethod]
+        public void SizeAndEndPoint_Get()
+        {
+            var test = new VersionPayload() { Capabilities = Array.Empty<NodeCapability>(), UserAgent = "neo3" };
+            Assert.AreEqual(22, test.Size);
 
-        test = VersionPayload.Create(ProtocolSettings.Default, new(), "neo3", new NodeCapability[] { new ServerCapability(NodeCapabilityType.TcpServer, 22) });
-        Assert.AreEqual(151, test.Size);
-    }
+            test = VersionPayload.Create(123, 456, "neo3", new NodeCapability[] { new ServerCapability(NodeCapabilityType.TcpServer, 22) });
+            Assert.AreEqual(25, test.Size);
+        }
 
-    [TestMethod]
-    public void DeserializeAndSerialize()
-    {
-        var test = VersionPayload.Create(ProtocolSettings.Default, new(), "neo3", new NodeCapability[] { new ServerCapability(NodeCapabilityType.TcpServer, 22) });
-        var clone = test.ToArray().AsSerializable<VersionPayload>();
+        [TestMethod]
+        public void DeserializeAndSerialize()
+        {
+            var test = VersionPayload.Create(123, 456, "neo3", new NodeCapability[] { new ServerCapability(NodeCapabilityType.TcpServer, 22) });
+            var clone = test.ToArray().AsSerializable<VersionPayload>();
 
-        CollectionAssert.AreEqual(test.Capabilities.ToByteArray(), clone.Capabilities.ToByteArray());
-        Assert.AreEqual(test.UserAgent, clone.UserAgent);
-        Assert.AreEqual(test.NodeId, clone.NodeId);
-        Assert.AreEqual(test.Timestamp, clone.Timestamp);
-        CollectionAssert.AreEqual(test.Capabilities.ToByteArray(), clone.Capabilities.ToByteArray());
+            Assert.AreSequenceEqual(test.Capabilities.ToByteArray(), clone.Capabilities.ToByteArray());
+            Assert.AreEqual(test.UserAgent, clone.UserAgent);
+            Assert.AreEqual(test.Nonce, clone.Nonce);
+            Assert.AreEqual(test.Timestamp, clone.Timestamp);
+            Assert.AreSequenceEqual(test.Capabilities.ToByteArray(), clone.Capabilities.ToByteArray());
 
-        Assert.ThrowsExactly<FormatException>(() => _ = VersionPayload.Create(ProtocolSettings.Default, new(), "neo3",
-            new NodeCapability[] {
-                new ServerCapability(NodeCapabilityType.TcpServer, 22) ,
-                new ServerCapability(NodeCapabilityType.TcpServer, 22)
-            }).ToArray().AsSerializable<VersionPayload>());
+            Assert.ThrowsExactly<FormatException>(() => _ = VersionPayload.Create(123, 456, "neo3",
+                new NodeCapability[] {
+                    new ServerCapability(NodeCapabilityType.TcpServer, 22) ,
+                    new ServerCapability(NodeCapabilityType.TcpServer, 22)
+                }).ToArray().AsSerializable<VersionPayload>());
+
+            var buf = test.ToArray();
+            buf[buf.Length - 2 - 1 - 1] += 3; // We've got 1 capability with 2 bytes, this adds three more to the array size.
+            buf = buf.Concat(new byte[] { 0xfe, 0x00 }).ToArray(); // Type = 0xfe, zero bytes of data.
+            buf = buf.Concat(new byte[] { 0xfd, 0x02, 0x00, 0x00 }).ToArray(); // Type = 0xfd, two bytes of data.
+            buf = buf.Concat(new byte[] { 0x10, 0x01, 0x00, 0x00, 0x00 }).ToArray(); // FullNode capability, 0x01 index.
+
+            clone = buf.AsSerializable<VersionPayload>();
+            Assert.HasCount(4, clone.Capabilities);
+            Assert.AreEqual(2, clone.Capabilities.OfType<UnknownCapability>().Count());
+        }
+
+        [TestMethod]
+        public void AllowCompression_WithoutDisableCompressionCapability()
+        {
+            var test = VersionPayload.Create(123, 456, "neo3",
+                new ServerCapability(NodeCapabilityType.TcpServer, 22),
+                new FullNodeCapability(1));
+
+            Assert.IsTrue(test.AllowCompression);
+
+            var clone = test.ToArray().AsSerializable<VersionPayload>();
+            Assert.IsTrue(clone.AllowCompression);
+            Assert.IsFalse(clone.Capabilities.OfType<DisableCompressionCapability>().Any());
+        }
+
+        [TestMethod]
+        public void AllowCompression_WithDisableCompressionCapability()
+        {
+            var test = VersionPayload.Create(123, 456, "neo3",
+                new ServerCapability(NodeCapabilityType.TcpServer, 22),
+                new DisableCompressionCapability());
+
+            Assert.IsFalse(test.AllowCompression);
+
+            var clone = test.ToArray().AsSerializable<VersionPayload>();
+
+            // Capability must deserialize as DisableCompressionCapability (not Unknown),
+            // otherwise AllowCompression would incorrectly stay true.
+            Assert.HasCount(1, clone.Capabilities.OfType<DisableCompressionCapability>());
+            Assert.IsFalse(clone.Capabilities.OfType<UnknownCapability>().Any());
+            Assert.IsFalse(clone.AllowCompression);
+        }
     }
 }

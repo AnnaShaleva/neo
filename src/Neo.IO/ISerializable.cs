@@ -9,27 +9,30 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.IO;
+using System.IO;
 
-/// <summary>
-/// Represents NEO objects that can be serialized.
-/// </summary>
-public interface ISerializable
+namespace Neo.IO
 {
     /// <summary>
-    /// The size of the object in bytes after serialization.
+    /// Represents NEO objects that can be serialized.
     /// </summary>
-    int Size { get; }
+    public interface ISerializable
+    {
+        /// <summary>
+        /// The size of the object in bytes after serialization.
+        /// </summary>
+        int Size { get; }
 
-    /// <summary>
-    /// Serializes the object using the specified <see cref="BinaryWriter"/>.
-    /// </summary>
-    /// <param name="writer">The <see cref="BinaryWriter"/> for writing data.</param>
-    void Serialize(BinaryWriter writer);
+        /// <summary>
+        /// Serializes the object using the specified <see cref="BinaryWriter"/>.
+        /// </summary>
+        /// <param name="writer">The <see cref="BinaryWriter"/> for writing data.</param>
+        void Serialize(BinaryWriter writer);
 
-    /// <summary>
-    /// Deserializes the object using the specified <see cref="MemoryReader"/>.
-    /// </summary>
-    /// <param name="reader">The <see cref="MemoryReader"/> for reading data.</param>
-    void Deserialize(ref MemoryReader reader);
+        /// <summary>
+        /// Deserializes the object using the specified <see cref="MemoryReader"/>.
+        /// </summary>
+        /// <param name="reader">The <see cref="MemoryReader"/> for reading data.</param>
+        void Deserialize(ref MemoryReader reader);
+    }
 }

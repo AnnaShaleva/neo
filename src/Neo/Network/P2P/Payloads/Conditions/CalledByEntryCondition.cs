@@ -12,64 +12,67 @@
 using Neo.IO;
 using Neo.Json;
 using Neo.SmartContract;
+using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 
-namespace Neo.Network.P2P.Payloads.Conditions;
-
-public class CalledByEntryCondition : WitnessCondition, IEquatable<CalledByEntryCondition>
+namespace Neo.Network.P2P.Payloads.Conditions
 {
-    public override WitnessConditionType Type => WitnessConditionType.CalledByEntry;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Equals(CalledByEntryCondition? other)
+    public class CalledByEntryCondition : WitnessCondition, IEquatable<CalledByEntryCondition>
     {
-        if (ReferenceEquals(this, other))
-            return true;
-        if (other is null) return false;
-        return Type == other.Type;
-    }
+        public override WitnessConditionType Type => WitnessConditionType.CalledByEntry;
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public override bool Equals(object? obj)
-    {
-        if (obj == null) return false;
-        return obj is CalledByEntryCondition cc && Equals(cc);
-    }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals(CalledByEntryCondition? other)
+        {
+            if (ReferenceEquals(this, other))
+                return true;
+            if (other is null) return false;
+            return Type == other.Type;
+        }
 
-    public override int GetHashCode()
-    {
-        return (byte)Type;
-    }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Equals(object? obj)
+        {
+            if (obj == null) return false;
+            return obj is CalledByEntryCondition cc && Equals(cc);
+        }
 
-    public override bool Match(ApplicationEngine engine)
-    {
-        var state = engine.CurrentContext!.GetState<ExecutionContextState>();
-        if (state.CallingContext is null) return true;
-        state = state.CallingContext.GetState<ExecutionContextState>();
-        return state.CallingContext is null;
-    }
+        public override int GetHashCode()
+        {
+            return (byte)Type;
+        }
 
-    protected override void DeserializeWithoutType(ref MemoryReader reader, int maxNestDepth) { }
+        public override bool Match(ApplicationEngine engine)
+        {
+            var state = engine.CurrentContext!.GetState<ExecutionContextState>();
+            if (state.CallingContext is null) return true;
+            state = state.CallingContext.GetState<ExecutionContextState>();
+            return state.CallingContext is null;
+        }
 
-    protected override void SerializeWithoutType(BinaryWriter writer) { }
+        protected override void DeserializeWithoutType(ref MemoryReader reader, int maxNestDepth) { }
 
-    private protected override void ParseJson(JObject json, int maxNestDepth) { }
+        protected override void SerializeWithoutType(BinaryWriter writer) { }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool operator ==(CalledByEntryCondition left, CalledByEntryCondition right)
-    {
-        if (left is null || right is null)
-            return Equals(left, right);
+        private protected override void ParseJson(JObject json, int maxNestDepth) { }
 
-        return left.Equals(right);
-    }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator ==(CalledByEntryCondition left, CalledByEntryCondition right)
+        {
+            if (left is null || right is null)
+                return Equals(left, right);
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool operator !=(CalledByEntryCondition left, CalledByEntryCondition right)
-    {
-        if (left is null || right is null)
-            return !Equals(left, right);
+            return left.Equals(right);
+        }
 
-        return !left.Equals(right);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator !=(CalledByEntryCondition left, CalledByEntryCondition right)
+        {
+            if (left is null || right is null)
+                return !Equals(left, right);
+
+            return !left.Equals(right);
+        }
     }
 }

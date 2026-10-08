@@ -9,18 +9,21 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.IO.Caching;
+using System;
 
-/// <summary>
-/// Constructor
-/// </summary>
-/// <param name="type">Type</param>
-[AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
-internal class ReflectionCacheAttribute
-    (Type type) : Attribute
+namespace Neo.IO.Caching
 {
     /// <summary>
-    /// Type
+    /// Constructor
     /// </summary>
-    public Type Type { get; } = type;
+    /// <param name="type">Type</param>
+    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
+    internal class ReflectionCacheAttribute
+        (Type type) : Attribute
+    {
+        /// <summary>
+        /// Type
+        /// </summary>
+        public Type Type { get; } = type;
+    }
 }

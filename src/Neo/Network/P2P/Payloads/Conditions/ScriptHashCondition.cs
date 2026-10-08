@@ -9,99 +9,102 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-using Neo.Extensions.IO;
+using Neo.Extensions;
 using Neo.IO;
 using Neo.Json;
 using Neo.SmartContract;
 using Neo.VM;
 using Neo.VM.Types;
+using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 using Array = Neo.VM.Types.Array;
 
-namespace Neo.Network.P2P.Payloads.Conditions;
-
-public class ScriptHashCondition : WitnessCondition, IEquatable<ScriptHashCondition>
+namespace Neo.Network.P2P.Payloads.Conditions
 {
-    /// <summary>
-    /// The script hash to be checked.
-    /// </summary>
-    public required UInt160 Hash;
-
-    public override int Size => base.Size + UInt160.Length;
-    public override WitnessConditionType Type => WitnessConditionType.ScriptHash;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Equals(ScriptHashCondition? other)
+    public class ScriptHashCondition : WitnessCondition, IEquatable<ScriptHashCondition>
     {
-        if (ReferenceEquals(this, other))
-            return true;
-        if (other is null) return false;
-        return
-            Type == other.Type &&
-            Hash == other.Hash;
-    }
+        /// <summary>
+        /// The script hash to be checked.
+        /// </summary>
+        public required UInt160 Hash;
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public override bool Equals(object? obj)
-    {
-        if (obj == null) return false;
-        return obj is ScriptHashCondition sc && Equals(sc);
-    }
+        public override int Size => base.Size + UInt160.Length;
+        public override WitnessConditionType Type => WitnessConditionType.ScriptHash;
 
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(Type, Hash);
-    }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals(ScriptHashCondition? other)
+        {
+            if (ReferenceEquals(this, other))
+                return true;
+            if (other is null) return false;
+            return
+                Type == other.Type &&
+                Hash == other.Hash;
+        }
 
-    protected override void DeserializeWithoutType(ref MemoryReader reader, int maxNestDepth)
-    {
-        Hash = reader.ReadSerializable<UInt160>();
-    }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Equals(object? obj)
+        {
+            if (obj == null) return false;
+            return obj is ScriptHashCondition sc && Equals(sc);
+        }
 
-    public override bool Match(ApplicationEngine engine)
-    {
-        return engine.CurrentScriptHash == Hash;
-    }
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Type, Hash);
+        }
 
-    protected override void SerializeWithoutType(BinaryWriter writer)
-    {
-        writer.Write(Hash);
-    }
+        protected override void DeserializeWithoutType(ref MemoryReader reader, int maxNestDepth)
+        {
+            Hash = reader.ReadSerializable<UInt160>();
+        }
 
-    private protected override void ParseJson(JObject json, int maxNestDepth)
-    {
-        Hash = UInt160.Parse(json["hash"]!.GetString());
-    }
+        public override bool Match(ApplicationEngine engine)
+        {
+            return engine.CurrentScriptHash == Hash;
+        }
 
-    public override JObject ToJson()
-    {
-        JObject json = base.ToJson();
-        json["hash"] = Hash.ToString();
-        return json;
-    }
+        protected override void SerializeWithoutType(BinaryWriter writer)
+        {
+            writer.Write(Hash);
+        }
 
-    public override StackItem ToStackItem(IReferenceCounter? referenceCounter)
-    {
-        var result = (Array)base.ToStackItem(referenceCounter);
-        result.Add(Hash.ToArray());
-        return result;
-    }
+        private protected override void ParseJson(JObject json, int maxNestDepth)
+        {
+            Hash = UInt160.Parse(json["hash"]!.GetString());
+        }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool operator ==(ScriptHashCondition left, ScriptHashCondition right)
-    {
-        if (left is null || right is null)
-            return Equals(left, right);
+        public override JObject ToJson()
+        {
+            JObject json = base.ToJson();
+            json["hash"] = Hash.ToString();
+            return json;
+        }
 
-        return left.Equals(right);
-    }
+        public override StackItem ToStackItem()
+        {
+            var result = (Array)base.ToStackItem();
+            result.Add(Hash.ToArray());
+            return result;
+        }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool operator !=(ScriptHashCondition left, ScriptHashCondition right)
-    {
-        if (left is null || right is null)
-            return !Equals(left, right);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator ==(ScriptHashCondition left, ScriptHashCondition right)
+        {
+            if (left is null || right is null)
+                return Equals(left, right);
 
-        return !left.Equals(right);
+            return left.Equals(right);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator !=(ScriptHashCondition left, ScriptHashCondition right)
+        {
+            if (left is null || right is null)
+                return !Equals(left, right);
+
+            return !left.Equals(right);
+        }
     }
 }

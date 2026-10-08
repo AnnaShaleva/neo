@@ -11,38 +11,41 @@
 
 using Neo.Json;
 using Neo.SmartContract;
+using System;
+using System.Linq;
 
-namespace Neo.Wallets.NEP6;
-
-internal class NEP6Contract : Contract
+namespace Neo.Wallets.NEP6
 {
-    public required string[] ParameterNames;
-    public bool Deployed;
-
-    public static NEP6Contract? FromJson(JObject? json)
+    internal class NEP6Contract : Contract
     {
-        if (json == null) return null;
-        return new NEP6Contract
-        {
-            Script = Convert.FromBase64String(json["script"]!.AsString()),
-            ParameterList = ((JArray)json["parameters"]!).Select(p => p!["type"]!.GetEnum<ContractParameterType>()).ToArray(),
-            ParameterNames = ((JArray)json["parameters"]!).Select(p => p!["name"]!.AsString()).ToArray(),
-            Deployed = json["deployed"]!.AsBoolean()
-        };
-    }
+        public required string[] ParameterNames;
+        public bool Deployed;
 
-    public JObject ToJson()
-    {
-        JObject contract = new();
-        contract["script"] = Convert.ToBase64String(Script);
-        contract["parameters"] = new JArray(ParameterList.Zip(ParameterNames, (type, name) =>
+        public static NEP6Contract? FromJson(JObject? json)
         {
-            JObject parameter = new();
-            parameter["name"] = name;
-            parameter["type"] = type;
-            return parameter;
-        }));
-        contract["deployed"] = Deployed;
-        return contract;
+            if (json == null) return null;
+            return new NEP6Contract
+            {
+                Script = Convert.FromBase64String(json["script"]!.AsString()),
+                ParameterList = ((JArray)json["parameters"]!).Select(p => p!["type"]!.GetEnum<ContractParameterType>()).ToArray(),
+                ParameterNames = ((JArray)json["parameters"]!).Select(p => p!["name"]!.AsString()).ToArray(),
+                Deployed = json["deployed"]!.AsBoolean()
+            };
+        }
+
+        public JObject ToJson()
+        {
+            JObject contract = new();
+            contract["script"] = Convert.ToBase64String(Script);
+            contract["parameters"] = new JArray(ParameterList.Zip(ParameterNames, (type, name) =>
+            {
+                JObject parameter = new();
+                parameter["name"] = name;
+                parameter["type"] = type;
+                return parameter;
+            }));
+            contract["deployed"] = Deployed;
+            return contract;
+        }
     }
 }

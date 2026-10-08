@@ -12,374 +12,455 @@
 #pragma warning disable IDE0051
 
 using Neo.Extensions;
-using Neo.Extensions.IO;
+using Neo.IO;
 using Neo.Network.P2P.Payloads;
 using Neo.Persistence;
 using Neo.SmartContract.Iterators;
 using Neo.SmartContract.Manifest;
 using Neo.VM;
 using Neo.VM.Types;
+using System;
 using System.Buffers.Binary;
+using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
+using Array = Neo.VM.Types.Array;
 
-namespace Neo.SmartContract.Native;
-
-/// <summary>
-/// A native contract used to manage all deployed smart contracts.
-/// </summary>
-[ContractEvent(0, name: "Deploy", "Hash", ContractParameterType.Hash160)]
-[ContractEvent(1, name: "Update", "Hash", ContractParameterType.Hash160)]
-[ContractEvent(2, name: "Destroy", "Hash", ContractParameterType.Hash160)]
-public sealed class ContractManagement : NativeContract
+namespace Neo.SmartContract.Native
 {
-    private const byte Prefix_MinimumDeploymentFee = 20;
-    private const byte Prefix_NextAvailableId = 15;
-    private const byte Prefix_Contract = 8;
-    private const byte Prefix_ContractHash = 12;
-
-    internal ContractManagement() : base(-1) { }
-
-    private int GetNextAvailableId(DataCache snapshot)
+    /// <summary>
+    /// A native contract used to manage all deployed smart contracts.
+    /// </summary>
+    public sealed class ContractManagement : NativeContract
     {
-        StorageItem item = snapshot.GetAndChange(CreateStorageKey(Prefix_NextAvailableId))!;
-        int value = (int)(BigInteger)item;
-        item.Add(1);
-        return value;
-    }
+        private const byte Prefix_MinimumDeploymentFee = 20;
+        private const byte Prefix_NextAvailableId = 15;
+        private const byte Prefix_Contract = 8;
+        private const byte Prefix_ContractHash = 12;
 
-    internal override ContractTask InitializeAsync(ApplicationEngine engine, Hardfork? hardfork)
-    {
-        if (hardfork == ActiveIn)
+        [ContractEvent(0, name: "Deploy", "Hash", ContractParameterType.Hash160)]
+        [ContractEvent(1, name: "Update", "Hash", ContractParameterType.Hash160)]
+        [ContractEvent(2, name: "Destroy", "Hash", ContractParameterType.Hash160)]
+        internal ContractManagement() : base() { }
+
+        private int GetNextAvailableId(DataCache snapshot)
         {
-            engine.SnapshotCache.Add(CreateStorageKey(Prefix_MinimumDeploymentFee), new StorageItem(10_00000000));
-            engine.SnapshotCache.Add(CreateStorageKey(Prefix_NextAvailableId), new StorageItem(1));
+            StorageItem item = snapshot.GetAndChange(CreateStorageKey(Prefix_NextAvailableId))!;
+            int value = (int)(BigInteger)item;
+            item.Add(1);
+            return value;
         }
-        return ContractTask.CompletedTask;
-    }
 
-    private async ContractTask OnDeployAsync(ApplicationEngine engine, ContractState contract, StackItem data, bool update)
-    {
-        ContractMethodDescriptor? md = contract.Manifest.Abi.GetMethod(ContractBasicMethod.Deploy, ContractBasicMethod.DeployPCount);
-        if (md is not null)
-            await engine.CallFromNativeContractAsync(Hash, contract.Hash, md.Name, data, update);
-        Notify(engine, update ? "Update" : "Deploy", contract.Hash);
-    }
-
-    internal override async ContractTask OnPersistAsync(ApplicationEngine engine)
-    {
-        foreach (NativeContract contract in Contracts)
+        internal override ContractTask InitializeAsync(ApplicationEngine engine, Hardfork? hardfork)
         {
-            if (contract.IsInitializeBlock(engine.ProtocolSettings, engine.PersistingBlock!.Index, out var hfs))
+            if (hardfork == ActiveIn)
             {
-                ContractState contractState = contract.GetContractState(engine.ProtocolSettings, engine.PersistingBlock.Index);
-                StorageItem? state = engine.SnapshotCache.GetAndChange(CreateStorageKey(Prefix_Contract, contract.Hash));
+                engine.SnapshotCache.Add(CreateStorageKey(Prefix_MinimumDeploymentFee), new StorageItem(10_00000000));
+                engine.SnapshotCache.Add(CreateStorageKey(Prefix_NextAvailableId), new StorageItem(1));
+            }
+            return ContractTask.CompletedTask;
+        }
 
-                if (state is null)
+        private async ContractTask OnDeployAsync(ApplicationEngine engine, ContractState contract, StackItem data, bool update)
+        {
+            ContractMethodDescriptor? md = contract.Manifest.Abi.GetMethod(ContractBasicMethod.Deploy, ContractBasicMethod.DeployPCount);
+            if (md is not null)
+                await engine.CallFromNativeContractAsync(Hash, contract.Hash, md.Name, data, update);
+            engine.SendNotification(Hash, update ? "Update" : "Deploy", new Array() { contract.Hash.ToArray() });
+        }
+
+        internal override async ContractTask OnPersistAsync(ApplicationEngine engine)
+        {
+            foreach (NativeContract contract in Contracts)
+            {
+                if (contract.IsInitializeBlock(engine.ProtocolSettings, engine.PersistingBlock!.Index, out var hfs))
                 {
-                    // Create the contract state
-                    engine.SnapshotCache.Add(CreateStorageKey(Prefix_Contract, contract.Hash), new StorageItem(contractState));
-                    engine.SnapshotCache.Add(CreateStorageKey(Prefix_ContractHash, contract.Id), new StorageItem(contract.Hash.ToArray()));
+                    ContractState contractState = contract.GetContractState(engine.ProtocolSettings, engine.PersistingBlock.Index);
+                    StorageItem? state = engine.SnapshotCache.GetAndChange(CreateStorageKey(Prefix_Contract, contract.Hash));
 
-                    // Initialize the native smart contract if it's active starting from the genesis.
-                    // If it's not the case, then hardfork-based initialization will be performed down below.
-                    if (contract.ActiveIn is null)
+                    if (state is null)
                     {
-                        await contract.InitializeAsync(engine, null);
-                    }
-                }
-                else
-                {
-                    // Parse old contract
-                    using var sealInterop = state.GetInteroperable(out ContractState oldContract, false);
-                    // Increase the update counter
-                    oldContract.UpdateCounter++;
-                    // Modify nef and manifest
-                    oldContract.Nef = contractState.Nef;
-                    oldContract.Manifest = contractState.Manifest;
-                }
+                        // Create the contract state
+                        engine.SnapshotCache.Add(CreateStorageKey(Prefix_Contract, contract.Hash), new StorageItem(contractState));
+                        engine.SnapshotCache.Add(CreateStorageKey(Prefix_ContractHash, contract.Id), new StorageItem(contract.Hash.ToArray()));
 
-                // Initialize native contract for all hardforks that are active starting from the persisting block.
-                // If the contract is active starting from some non-nil hardfork, then this hardfork is also included into hfs.
-                if (hfs?.Length > 0)
-                {
-                    foreach (var hf in hfs)
+                        // Initialize the native smart contract if it's active starting from the genesis.
+                        // If it's not the case, then hardfork-based initialization will be performed down below.
+                        if (contract.ActiveIn is null)
+                        {
+                            await contract.InitializeAsync(engine, null);
+                        }
+                    }
+                    else
                     {
-                        await contract.InitializeAsync(engine, hf);
+                        // Parse old contract
+                        using var sealInterop = state.GetInteroperable(out ContractState oldContract, false);
+                        // Increase the update counter
+                        oldContract.UpdateCounter++;
+                        // Modify nef and manifest
+                        oldContract.Nef = contractState.Nef;
+                        oldContract.Manifest = contractState.Manifest;
                     }
-                }
 
-                // Emit native contract notification
-                Notify(engine, state is null ? "Deploy" : "Update", contract.Hash);
+                    // Initialize native contract for all hardforks that are active starting from the persisting block.
+                    // If the contract is active starting from some non-nil hardfork, then this hardfork is also included into hfs.
+                    if (hfs?.Length > 0)
+                    {
+                        foreach (var hf in hfs)
+                        {
+                            await contract.InitializeAsync(engine, hf);
+                        }
+                    }
+
+                    // Emit native contract notification
+                    engine.SendNotification(Hash, state is null ? "Deploy" : "Update", new Array() { contract.Hash.ToArray() });
+                }
             }
         }
-    }
 
-    /// <summary>
-    /// Gets the minimum deployment fee for deploying a contract.
-    /// </summary>
-    /// <param name="snapshot">The snapshot used to read data.</param>
-    /// <returns>The minimum deployment fee for deploying a contract.</returns>
-    [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.ReadStates)]
-#pragma warning disable CA1859
-    private long GetMinimumDeploymentFee(IReadOnlyStore snapshot)
-#pragma warning restore CA1859
-    {
-        // In the unit of datoshi, 1 datoshi = 1e-8 GAS
-        return (long)(BigInteger)snapshot[CreateStorageKey(Prefix_MinimumDeploymentFee)];
-    }
-
-    /// <summary>
-    /// Sets the minimum deployment fee for deploying a contract. Only committee members can call this method.
-    /// </summary>
-    /// <param name="engine">The engine used to write data.</param>
-    /// <param name="value">The minimum deployment fee for deploying a contract.</param>
-    /// <exception cref="InvalidOperationException">Thrown when the caller is not a committee member.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is negative.</exception>
-    [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.States)]
-    private void SetMinimumDeploymentFee(ApplicationEngine engine, BigInteger value/* In the unit of datoshi, 1 datoshi = 1e-8 GAS*/)
-    {
-        if (value < 0) throw new ArgumentOutOfRangeException(nameof(value), "cannot be negative");
-        AssertCommittee(engine);
-        engine.SnapshotCache.GetAndChange(CreateStorageKey(Prefix_MinimumDeploymentFee))!.Set(value);
-    }
-
-    /// <summary>
-    /// Gets the deployed contract with the specified hash.
-    /// </summary>
-    /// <param name="snapshot">The snapshot used to read data.</param>
-    /// <param name="hash">The hash of the deployed contract.</param>
-    /// <returns>The deployed contract.</returns>
-    [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.ReadStates)]
-    public ContractState? GetContract(IReadOnlyStore snapshot, UInt160 hash)
-    {
-        var key = CreateStorageKey(Prefix_Contract, hash);
-        return snapshot.TryGet(key, out var item) ? item.GetInteroperable<ContractState>(false) : null;
-    }
-
-    /// <summary>
-    /// Check if exists the deployed contract with the specified hash.
-    /// </summary>
-    /// <param name="snapshot">The snapshot used to read data.</param>
-    /// <param name="hash">The hash of the deployed contract.</param>
-    /// <returns>True if deployed contract exists.</returns>
-    [ContractMethod(CpuFee = 1 << 14, RequiredCallFlags = CallFlags.ReadStates)]
-    public bool IsContract(IReadOnlyStore snapshot, UInt160 hash)
-    {
-        var key = CreateStorageKey(Prefix_Contract, hash);
-        return snapshot.Contains(key);
-    }
-
-    /// <summary>
-    /// Maps specified ID to deployed contract.
-    /// </summary>
-    /// <param name="snapshot">The snapshot used to read data.</param>
-    /// <param name="id">Contract ID.</param>
-    /// <returns>The deployed contract.</returns>
-    [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.ReadStates)]
-    public ContractState? GetContractById(IReadOnlyStore snapshot, int id)
-    {
-        var key = CreateStorageKey(Prefix_ContractHash, id);
-        return snapshot.TryGet(key, out var item) ? GetContract(snapshot, new UInt160(item.Value.Span)) : null;
-    }
-
-    /// <summary>
-    /// Gets hashes of all non native deployed contracts.
-    /// </summary>
-    /// <param name="snapshot">The snapshot used to read data.</param>
-    /// <returns>Iterator with hashes of all deployed contracts.</returns>
-    [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.ReadStates)]
-    private StorageIterator GetContractHashes(IReadOnlyStore snapshot)
-    {
-        const FindOptions options = FindOptions.RemovePrefix;
-        var prefixKey = CreateStorageKey(Prefix_ContractHash);
-        var enumerator = snapshot.Find(prefixKey)
-            .Select(p => (p.Key, p.Value, Id: BinaryPrimitives.ReadInt32BigEndian(p.Key.Key.Span[1..])))
-            .Where(p => p.Id >= 0)
-            .Select(p => (p.Key, p.Value))
-            .GetEnumerator();
-        return new StorageIterator(enumerator, 1, options);
-    }
-
-    /// <summary>
-    /// Check if a method exists in a contract.
-    /// </summary>
-    /// <param name="snapshot">The snapshot used to read data.</param>
-    /// <param name="hash">The hash of the deployed contract.</param>
-    /// <param name="method">The name of the method</param>
-    /// <param name="pcount">The number of parameters</param>
-    /// <returns>True if the method exists.</returns>
-    [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.ReadStates)]
-    public bool HasMethod(IReadOnlyStore snapshot, UInt160 hash, string method, int pcount)
-    {
-        var contract = GetContract(snapshot, hash);
-        if (contract is null) return false;
-        var methodDescriptor = contract.Manifest.Abi.GetMethod(method, pcount);
-        return methodDescriptor is not null;
-    }
-
-    /// <summary>
-    /// Gets all deployed contracts.
-    /// </summary>
-    /// <param name="snapshot">The snapshot used to read data.</param>
-    /// <returns>The deployed contracts.</returns>
-    public IEnumerable<ContractState> ListContracts(IReadOnlyStore snapshot)
-    {
-        var listContractsPrefix = CreateStorageKey(Prefix_Contract);
-        return snapshot.Find(listContractsPrefix).Select(kvp => kvp.Value.GetInteroperableClone<ContractState>(false));
-    }
-
-    /// <summary>
-    /// Deploys a contract. It needs to pay the deployment fee and storage fee.
-    /// </summary>
-    /// <param name="engine">The engine used to write data.</param>
-    /// <param name="nefFile">The NEF file of the contract.</param>
-    /// <param name="manifest">The manifest of the contract.</param>
-    /// <returns>The deployed contract.</returns>
-    [ContractMethod(RequiredCallFlags = CallFlags.All)]
-    private ContractTask<ContractState> Deploy(ApplicationEngine engine, byte[] nefFile, byte[] manifest)
-    {
-        return Deploy(engine, nefFile, manifest, StackItem.Null);
-    }
-
-    /// <summary>
-    /// Deploys a contract. It needs to pay the deployment fee and storage fee.
-    /// </summary>
-    /// <param name="engine">The engine used to write data.</param>
-    /// <param name="nefFile">The NEF file of the contract.</param>
-    /// <param name="manifest">The manifest of the contract.</param>
-    /// <param name="data">The data of the contract.</param>
-    /// <returns>The deployed contract.</returns>
-    [ContractMethod(RequiredCallFlags = CallFlags.All)]
-    private async ContractTask<ContractState> Deploy(ApplicationEngine engine, byte[] nefFile, byte[] manifest, StackItem data)
-    {
-        if (engine.ScriptContainer is not Transaction tx)
-            throw new InvalidOperationException();
-        if (nefFile.Length == 0)
-            throw new ArgumentException($"NEF file length cannot be zero.");
-        if (manifest.Length == 0)
-            throw new ArgumentException($"Manifest length cannot be zero.");
-
-        engine.AddFee(Math.Max(
-            engine.StoragePrice * (nefFile.Length + manifest.Length),
-            GetMinimumDeploymentFee(engine.SnapshotCache)
-            ));
-
-        NefFile nef = nefFile.AsSerializable<NefFile>();
-        ContractManifest parsedManifest = ContractManifest.Parse(manifest);
-        Helper.Check(new Script(nef.Script, true), parsedManifest.Abi);
-        UInt160 hash = Helper.GetContractHash(tx.Sender, nef.CheckSum, parsedManifest.Name);
-
-        if (Policy.IsBlocked(engine.SnapshotCache, hash))
-            throw new InvalidOperationException($"The contract {hash} has been blocked.");
-
-        StorageKey key = CreateStorageKey(Prefix_Contract, hash);
-        if (engine.SnapshotCache.Contains(key))
-            throw new InvalidOperationException($"Contract Already Exists: {hash}");
-        ContractState contract = new()
+        /// <summary>
+        /// Gets the minimum deployment fee for deploying a contract.
+        /// </summary>
+        /// <param name="snapshot">The snapshot used to read data.</param>
+        /// <returns>The minimum deployment fee for deploying a contract.</returns>
+        [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.ReadStates)]
+        private long GetMinimumDeploymentFee(IReadOnlyStore snapshot)
         {
-            Id = GetNextAvailableId(engine.SnapshotCache),
-            UpdateCounter = 0,
-            Nef = nef,
-            Hash = hash,
-            Manifest = parsedManifest
-        };
+            // In the unit of datoshi, 1 datoshi = 1e-8 GAS
+            return (long)(BigInteger)snapshot[CreateStorageKey(Prefix_MinimumDeploymentFee)];
+        }
 
-        if (!contract.Manifest.IsValid(engine.Limits, hash)) throw new InvalidOperationException($"Invalid Manifest: {hash}");
-
-        engine.SnapshotCache.Add(key, StorageItem.CreateSealed(contract));
-        engine.SnapshotCache.Add(CreateStorageKey(Prefix_ContractHash, contract.Id), new StorageItem(hash.ToArray()));
-
-        await OnDeployAsync(engine, contract, data, false);
-
-        return contract;
-    }
-
-    /// <summary>
-    /// Updates a contract. It needs to pay the storage fee.
-    /// </summary>
-    /// <param name="engine">The engine used to write data.</param>
-    /// <param name="nefFile">The NEF file of the contract.</param>
-    /// <param name="manifest">The manifest of the contract.</param>
-    /// <returns>The updated contract.</returns>
-    [ContractMethod(RequiredCallFlags = CallFlags.All)]
-    private ContractTask Update(ApplicationEngine engine, byte[]? nefFile, byte[]? manifest)
-    {
-        return Update(engine, nefFile, manifest, StackItem.Null);
-    }
-
-    /// <summary>
-    /// Updates a contract. It needs to pay the storage fee.
-    /// </summary>
-    /// <param name="engine">The engine used to write data.</param>
-    /// <param name="nefFile">The NEF file of the contract.</param>
-    /// <param name="manifest">The manifest of the contract.</param>
-    /// <param name="data">The data of the contract.</param>
-    /// <returns>The updated contract.</returns>
-    [ContractMethod(RequiredCallFlags = CallFlags.All)]
-    private ContractTask Update(ApplicationEngine engine, byte[]? nefFile, byte[]? manifest, StackItem data)
-    {
-        if (nefFile is null && manifest is null)
-            throw new ArgumentException("NEF file and manifest cannot both be null.");
-
-        engine.AddFee(engine.StoragePrice * ((nefFile?.Length ?? 0) + (manifest?.Length ?? 0)));
-
-        var contractState = engine.SnapshotCache.GetAndChange(CreateStorageKey(Prefix_Contract, engine.CallingScriptHash!))
-            ?? throw new InvalidOperationException($"Updating Contract Does Not Exist: {engine.CallingScriptHash}");
-
-        using var sealInterop = contractState.GetInteroperable(out ContractState contract, false);
-        if (contract is null)
-            throw new InvalidOperationException($"Updating Contract Does Not Exist: {engine.CallingScriptHash}");
-        if (contract.UpdateCounter == ushort.MaxValue)
-            throw new InvalidOperationException($"The contract reached the maximum number of updates.");
-
-        if (nefFile != null)
+        /// <summary>
+        /// Sets the minimum deployment fee for deploying a contract. Only committee members can call this method.
+        /// </summary>
+        /// <param name="engine">The engine used to write data.</param>
+        /// <param name="value">The minimum deployment fee for deploying a contract.</param>
+        /// <exception cref="InvalidOperationException">Thrown when the caller is not a committee member.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is negative.</exception>
+        [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.States)]
+        private void SetMinimumDeploymentFee(ApplicationEngine engine, BigInteger value/* In the unit of datoshi, 1 datoshi = 1e-8 GAS*/)
         {
+            if (value < 0) throw new ArgumentOutOfRangeException(nameof(value), "cannot be negative");
+            AssertCommittee(engine);
+            engine.SnapshotCache.GetAndChange(CreateStorageKey(Prefix_MinimumDeploymentFee))!.Set(value);
+        }
+
+        /// <summary>
+        /// Gets the deployed contract with the specified hash.
+        /// </summary>
+        /// <param name="snapshot">The snapshot used to read data.</param>
+        /// <param name="hash">The hash of the deployed contract.</param>
+        /// <returns>The deployed contract.</returns>
+        [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.ReadStates)]
+        public ContractState? GetContract(IReadOnlyStore snapshot, UInt160 hash)
+        {
+            var key = CreateStorageKey(Prefix_Contract, hash);
+            return snapshot.TryGet(key, out var item) ? item.GetInteroperable<ContractState>(false) : null;
+        }
+
+        /// <summary>
+        /// Gets ID of the contract with the specified hash. Does not perform full
+        /// contract state deserialization hence may be used as an optimized version
+        /// of GetContract is only ID is needed.
+        /// </summary>
+        /// <param name="snapshot">The snapshot used to read data.</param>
+        /// <param name="hash">The contract hash.</param>
+        /// <returns>ID of the contract (if exists).</returns>
+        public int? GetContractId(IReadOnlyStore snapshot, UInt160 hash)
+        {
+            var key = CreateStorageKey(Prefix_Contract, hash);
+            if (!snapshot.TryGet(key, out var item))
+                return null;
+
+            MemoryReader reader = new(item.Value);
+            var type = (StackItemType)reader.ReadByte(); // ContractState container type.
+            if (type != StackItemType.Array)
+                return null;
+            int count = (int)reader.ReadVarInt(); // the number of items in ContractState.
+            if (count < 5)
+                return null;
+            type = (StackItemType)reader.ReadByte(); // the type of the first item (contract ID).
+            if (type != StackItemType.Integer)
+                return null;
+            return (int)new BigInteger(reader.ReadVarMemory(Integer.MaxSize).Span); // the ID itself.
+        }
+
+        /// <summary>
+        /// Check if exists the deployed contract with the specified hash.
+        /// </summary>
+        /// <param name="snapshot">The snapshot used to read data.</param>
+        /// <param name="hash">The hash of the deployed contract.</param>
+        /// <returns>True if deployed contract exists.</returns>
+        [ContractMethod(Hardfork.HF_Echidna, CpuFee = 1 << 14, RequiredCallFlags = CallFlags.ReadStates)]
+        public bool IsContract(IReadOnlyStore snapshot, UInt160 hash)
+        {
+            var key = CreateStorageKey(Prefix_Contract, hash);
+            return snapshot.Contains(key);
+        }
+
+        /// <summary>
+        /// Maps specified ID to deployed contract.
+        /// </summary>
+        /// <param name="snapshot">The snapshot used to read data.</param>
+        /// <param name="id">Contract ID.</param>
+        /// <returns>The deployed contract.</returns>
+        [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.ReadStates)]
+        public ContractState? GetContractById(IReadOnlyStore snapshot, int id)
+        {
+            var key = CreateStorageKey(Prefix_ContractHash, id);
+            return snapshot.TryGet(key, out var item) ? GetContract(snapshot, new UInt160(item.Value.Span)) : null;
+        }
+
+        /// <summary>
+        /// Gets hashes of all non native deployed contracts.
+        /// </summary>
+        /// <param name="snapshot">The snapshot used to read data.</param>
+        /// <returns>Iterator with hashes of all deployed contracts.</returns>
+        [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.ReadStates)]
+        public IIterator GetContractHashes(IReadOnlyStore snapshot)
+        {
+            const FindOptions options = FindOptions.RemovePrefix;
+            var prefixKey = CreateStorageKey(Prefix_ContractHash);
+            var enumerator = snapshot.Find(prefixKey)
+                .Select(p => (p.Key, p.Value, Id: BinaryPrimitives.ReadInt32BigEndian(p.Key.Key.Span[1..])))
+                .Where(p => p.Id >= 0)
+                .Select(p => (p.Key, p.Value))
+                .GetEnumerator();
+            return new StorageIterator(enumerator, 1, options);
+        }
+
+        /// <summary>
+        /// Check if a method exists in a contract.
+        /// </summary>
+        /// <param name="snapshot">The snapshot used to read data.</param>
+        /// <param name="hash">The hash of the deployed contract.</param>
+        /// <param name="method">The name of the method</param>
+        /// <param name="pcount">The number of parameters</param>
+        /// <returns>True if the method exists.</returns>
+        [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.ReadStates)]
+        public bool HasMethod(IReadOnlyStore snapshot, UInt160 hash, string method, int pcount)
+        {
+            var contract = GetContract(snapshot, hash);
+            if (contract is null) return false;
+            var methodDescriptor = contract.Manifest.Abi.GetMethod(method, pcount);
+            return methodDescriptor is not null;
+        }
+
+        /// <summary>
+        /// Gets all deployed contracts.
+        /// </summary>
+        /// <param name="snapshot">The snapshot used to read data.</param>
+        /// <returns>The deployed contracts.</returns>
+        public IEnumerable<ContractState> ListContracts(IReadOnlyStore snapshot)
+        {
+            var listContractsPrefix = CreateStorageKey(Prefix_Contract);
+            return snapshot.Find(listContractsPrefix).Select(kvp => kvp.Value.GetInteroperableClone<ContractState>(false));
+        }
+
+        /// <summary>
+        /// Deploys a contract. It needs to pay the deployment fee and storage fee.
+        /// </summary>
+        /// <param name="engine">The engine used to write data.</param>
+        /// <param name="nefFile">The NEF file of the contract.</param>
+        /// <param name="manifest">The manifest of the contract.</param>
+        /// <returns>The deployed contract.</returns>
+        [ContractMethod(RequiredCallFlags = CallFlags.States | CallFlags.AllowNotify)]
+        private ContractTask<ContractState> Deploy(ApplicationEngine engine, byte[] nefFile, byte[] manifest)
+        {
+            return Deploy(engine, nefFile, manifest, StackItem.Null);
+        }
+
+        /// <summary>
+        /// Deploys a contract. It needs to pay the deployment fee and storage fee.
+        /// </summary>
+        /// <param name="engine">The engine used to write data.</param>
+        /// <param name="nefFile">The NEF file of the contract.</param>
+        /// <param name="manifest">The manifest of the contract.</param>
+        /// <param name="data">The data of the contract.</param>
+        /// <returns>The deployed contract.</returns>
+        [ContractMethod(RequiredCallFlags = CallFlags.States | CallFlags.AllowNotify)]
+        private async ContractTask<ContractState> Deploy(ApplicationEngine engine, byte[] nefFile, byte[] manifest, StackItem data)
+        {
+            // Require CallFlags.All flag for post-Aspidochelone transactions, ref. #2653, #2673.
+            if (engine.IsHardforkEnabled(Hardfork.HF_Aspidochelone))
+            {
+                var state = engine.CurrentContext!.GetState<ExecutionContextState>();
+                if (!state.CallFlags.HasFlag(CallFlags.All))
+                    throw new InvalidOperationException($"Cannot call Deploy with the flag {state.CallFlags}.");
+            }
+            if (engine.ScriptContainer is not Transaction tx)
+                throw new InvalidOperationException();
             if (nefFile.Length == 0)
                 throw new ArgumentException($"NEF file length cannot be zero.");
-
-            // Update nef
-            contract.Nef = nefFile.AsSerializable<NefFile>();
-        }
-        // Clean whitelist (emit event if exists with the old manifest information)
-        Policy.CleanWhitelist(engine, contract);
-        if (manifest != null)
-        {
             if (manifest.Length == 0)
                 throw new ArgumentException($"Manifest length cannot be zero.");
 
-            var manifestNew = ContractManifest.Parse(manifest);
-            if (manifestNew.Name != contract.Manifest.Name)
-                throw new InvalidOperationException("The name of the contract can't be changed.");
-            if (!manifestNew.IsValid(engine.Limits, contract.Hash))
-                throw new InvalidOperationException($"Invalid Manifest: {contract.Hash}");
-            contract.Manifest = manifestNew;
-        }
-        Helper.Check(new Script(contract.Nef.Script, true), contract.Manifest.Abi);
-        // Increase update counter
-        contract.UpdateCounter++;
-        return OnDeployAsync(engine, contract, data, true);
-    }
+            // In the unit of picoGAS, 1 picoGAS = 1e-12 GAS
+            engine.AddFee(BigInteger.Max(engine.StoragePrice * (nefFile.Length + manifest.Length),
+                GetMinimumDeploymentFee(engine.SnapshotCache)), true);
 
-    /// <summary>
-    /// Destroys a contract.
-    /// </summary>
-    /// <param name="engine">The engine used to write data.</param>
-    [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.States | CallFlags.AllowNotify)]
-    private async ContractTask Destroy(ApplicationEngine engine)
-    {
-        UInt160 hash = engine.CallingScriptHash!;
-        StorageKey ckey = CreateStorageKey(Prefix_Contract, hash);
-        ContractState? contract = engine.SnapshotCache.TryGet(ckey)?.GetInteroperable<ContractState>(false);
-        if (contract is null) return;
-        engine.SnapshotCache.Delete(ckey);
-        engine.SnapshotCache.Delete(CreateStorageKey(Prefix_ContractHash, contract.Id));
-        foreach (var (key, _) in engine.SnapshotCache.Find(StorageKey.CreateSearchPrefix(contract.Id, ReadOnlySpan<byte>.Empty)))
-            engine.SnapshotCache.Delete(key);
-        // lock contract
-        await Policy.BlockAccountInternal(engine, hash);
-        // Clean whitelist (emit event if exists with the old manifest information)
-        Policy.CleanWhitelist(engine, contract);
-        // emit event
-        Notify(engine, "Destroy", hash);
+            NefFile nef = nefFile.AsSerializable<NefFile>();
+            ContractManifest parsedManifest = ContractManifest.Parse(manifest);
+            Helper.Check(new Script(nef.Script, engine.IsHardforkEnabled(Hardfork.HF_Basilisk)), parsedManifest.Abi);
+            UInt160 hash = Helper.GetContractHash(tx.Sender, nef.CheckSum, parsedManifest.Name);
+
+            if (Policy.IsBlocked(engine.SnapshotCache, hash))
+                throw new InvalidOperationException($"The contract {hash} has been blocked.");
+
+            StorageKey key = CreateStorageKey(Prefix_Contract, hash);
+            if (engine.SnapshotCache.Contains(key))
+                throw new InvalidOperationException($"Contract Already Exists: {hash}");
+            ContractState contract = new()
+            {
+                Id = GetNextAvailableId(engine.SnapshotCache),
+                UpdateCounter = 0,
+                Nef = nef,
+                Hash = hash,
+                Manifest = parsedManifest
+            };
+
+            if (!contract.Manifest.IsValid(engine.Limits, hash)) throw new InvalidOperationException($"Invalid Manifest: {hash}");
+
+            engine.SnapshotCache.Add(key, StorageItem.CreateSealed(contract));
+            engine.SnapshotCache.Add(CreateStorageKey(Prefix_ContractHash, contract.Id), new StorageItem(hash.ToArray()));
+
+            await OnDeployAsync(engine, contract, data, false);
+
+            return contract;
+        }
+
+        /// <summary>
+        /// Updates a contract. It needs to pay the storage fee.
+        /// </summary>
+        /// <param name="engine">The engine used to write data.</param>
+        /// <param name="nefFile">The NEF file of the contract.</param>
+        /// <param name="manifest">The manifest of the contract.</param>
+        /// <returns>The updated contract.</returns>
+        [ContractMethod(RequiredCallFlags = CallFlags.States | CallFlags.AllowNotify)]
+        private ContractTask Update(ApplicationEngine engine, byte[]? nefFile, byte[]? manifest)
+        {
+            return Update(engine, nefFile, manifest, StackItem.Null);
+        }
+
+        /// <summary>
+        /// Updates a contract. It needs to pay the storage fee.
+        /// </summary>
+        /// <param name="engine">The engine used to write data.</param>
+        /// <param name="nefFile">The NEF file of the contract.</param>
+        /// <param name="manifest">The manifest of the contract.</param>
+        /// <param name="data">The data of the contract.</param>
+        /// <returns>The updated contract.</returns>
+        [ContractMethod(RequiredCallFlags = CallFlags.States | CallFlags.AllowNotify)]
+        private ContractTask Update(ApplicationEngine engine, byte[]? nefFile, byte[]? manifest, StackItem data)
+        {
+            // Require CallFlags.All flag for post-Aspidochelone transactions, ref. #2653, #2673.
+            if (engine.IsHardforkEnabled(Hardfork.HF_Aspidochelone))
+            {
+                var state = engine.CurrentContext!.GetState<ExecutionContextState>();
+                if (!state.CallFlags.HasFlag(CallFlags.All))
+                    throw new InvalidOperationException($"Cannot call Update with the flag {state.CallFlags}.");
+            }
+            if (nefFile is null && manifest is null)
+                throw new ArgumentException("NEF file and manifest cannot both be null.");
+
+            engine.AddFee(engine.StoragePrice * ((nefFile?.Length ?? 0) + (manifest?.Length ?? 0)), true);
+
+            var contractState = engine.SnapshotCache.GetAndChange(CreateStorageKey(Prefix_Contract, engine.CallingScriptHash!))
+                ?? throw new InvalidOperationException($"Updating Contract Does Not Exist: {engine.CallingScriptHash}");
+
+            using var sealInterop = contractState.GetInteroperable(out ContractState contract, false);
+            if (contract is null)
+                throw new InvalidOperationException($"Updating Contract Does Not Exist: {engine.CallingScriptHash}");
+            if (contract.UpdateCounter == ushort.MaxValue)
+                throw new InvalidOperationException($"The contract reached the maximum number of updates.");
+
+            if (nefFile != null)
+            {
+                if (nefFile.Length == 0)
+                    throw new ArgumentException($"NEF file length cannot be zero.");
+
+                // Update nef
+                contract.Nef = nefFile.AsSerializable<NefFile>();
+            }
+            // Clean whitelist (emit event if exists with the old manifest information)
+            Policy.CleanWhitelist(engine, contract);
+            if (manifest != null)
+            {
+                if (manifest.Length == 0)
+                    throw new ArgumentException($"Manifest length cannot be zero.");
+
+                var manifestNew = ContractManifest.Parse(manifest);
+                if (manifestNew.Name != contract.Manifest.Name)
+                    throw new InvalidOperationException("The name of the contract can't be changed.");
+                if (!manifestNew.IsValid(engine.Limits, contract.Hash))
+                    throw new InvalidOperationException($"Invalid Manifest: {contract.Hash}");
+                contract.Manifest = manifestNew;
+            }
+            Helper.Check(new Script(contract.Nef.Script, engine.IsHardforkEnabled(Hardfork.HF_Basilisk)), contract.Manifest.Abi);
+            // Increase update counter
+            contract.UpdateCounter++;
+            return OnDeployAsync(engine, contract, data, true);
+        }
+
+        /// <summary>
+        /// Destroys a contract. Pre-Gorgon version of `destroy` that blocks the contract's account
+        /// *after* removing the contract state and contract storage items from the snapshot.
+        /// </summary>
+        /// <param name="engine">The engine used to write data.</param>
+        [ContractMethod(true, Hardfork.HF_Gorgon, CpuFee = 1 << 15, RequiredCallFlags = CallFlags.States | CallFlags.AllowNotify, Name = "destroy")]
+        private async ContractTask DestroyV0(ApplicationEngine engine)
+        {
+            await DestroyInternal(engine, false);
+        }
+
+        /// <summary>
+        /// Destroys a contract. Post-Gorgon version of `destroy` that blocks the contract's account
+        /// *prior to* removing the contract state and contract storage items from the snapshot.
+        /// </summary>
+        /// <param name="engine">The engine used to write data.</param>
+        [ContractMethod(Hardfork.HF_Gorgon, CpuFee = 1 << 15, RequiredCallFlags = CallFlags.States | CallFlags.AllowNotify, Name = "destroy")]
+        private async ContractTask DestroyV1(ApplicationEngine engine)
+        {
+            await DestroyInternal(engine, true);
+        }
+
+        /// <summary>
+        /// An internal representation of `destroy` method that destroys a contract.
+        /// </summary>
+        /// <param name="engine">The engine used to write data.</param>
+        /// <param name="blockBeforeErase">Denotes whether the contract account blocking should happen before the contract state and storage items removal from the storage.</param>
+        private async ContractTask DestroyInternal(ApplicationEngine engine, bool blockBeforeErase)
+        {
+            UInt160 hash = engine.CallingScriptHash!;
+            StorageKey ckey = CreateStorageKey(Prefix_Contract, hash);
+            ContractState? contract = engine.SnapshotCache.TryGet(ckey)?.GetInteroperable<ContractState>(false);
+            if (contract is null) return;
+
+            if (blockBeforeErase)
+            {
+                // Lock contract (and allow to receive an unclaimed GAS after votes revoke, if so,
+                // because the contract is not yet removed from the snapshot).
+                await Policy.BlockAccountInternal(engine, hash);
+                // Clean whitelist (emit event if exists with the old manifest information).
+                Policy.CleanWhitelist(engine, contract);
+            }
+
+            engine.SnapshotCache.Delete(ckey);
+            engine.SnapshotCache.Delete(CreateStorageKey(Prefix_ContractHash, contract.Id));
+            foreach (var (key, _) in engine.SnapshotCache.Find(StorageKey.CreateSearchPrefix(contract.Id, ReadOnlySpan<byte>.Empty)))
+                engine.SnapshotCache.Delete(key);
+
+            if (!blockBeforeErase)
+            {
+                // Lock contract (and skip any side calls like onNEP17Payment on votes revoke
+                // because the contract is already removed from the snapshot).
+                await Policy.BlockAccountInternal(engine, hash);
+                // Clean whitelist (emit event if exists with the old manifest information).
+                Policy.CleanWhitelist(engine, contract);
+            }
+
+            // Emit event.
+            engine.SendNotification(Hash, "Destroy", new Array() { hash.ToArray() });
+        }
     }
 }

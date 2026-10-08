@@ -10,11 +10,13 @@
 // modifications are permitted.
 
 using Neo.VM.Types;
+using System;
 
-namespace Neo.SmartContract;
-
-[AttributeUsage(AttributeTargets.Parameter)]
-abstract class ValidatorAttribute : Attribute
+namespace Neo.SmartContract
 {
-    public abstract void Validate(StackItem item);
+    [AttributeUsage(AttributeTargets.Parameter)]
+    abstract class ValidatorAttribute : Attribute
+    {
+        public abstract void Validate(StackItem item);
+    }
 }

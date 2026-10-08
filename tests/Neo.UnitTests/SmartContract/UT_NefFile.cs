@@ -9,89 +9,20 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.Extensions;
-using Neo.Extensions.IO;
 using Neo.IO;
 using Neo.SmartContract;
+using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 
-namespace Neo.UnitTests.SmartContract;
-
-[TestClass]
-public class UT_NefFile
+namespace Neo.UnitTests.SmartContract
 {
-    public NefFile file = new()
+    [TestClass]
+    public class UT_NefFile
     {
-        Compiler = "".PadLeft(32, ' '),
-        Source = string.Empty,
-        Tokens = Array.Empty<MethodToken>(),
-        Script = new byte[] { 0x01, 0x02, 0x03 }
-    };
-
-    [TestInitialize]
-    public void TestSetup()
-    {
-        file.CheckSum = NefFile.ComputeChecksum(file);
-    }
-
-    [TestMethod]
-    public void TestDeserialize()
-    {
-        byte[] wrongMagic = { 0x00, 0x00, 0x00, 0x00 };
-        using (MemoryStream ms = new(1024))
-        using (BinaryWriter writer = new(ms))
-        {
-            ((ISerializable)file).Serialize(writer);
-            ms.Seek(0, SeekOrigin.Begin);
-            ms.Write(wrongMagic, 0, 4);
-            ISerializable newFile = (NefFile)RuntimeHelpers.GetUninitializedObject(typeof(NefFile));
-            Assert.ThrowsExactly<FormatException>(() => MemoryReaderDeserialize(ms.ToArray(), newFile));
-        }
-
-        file.CheckSum = 0;
-        using (MemoryStream ms = new(1024))
-        using (BinaryWriter writer = new(ms))
-        {
-            ((ISerializable)file).Serialize(writer);
-            ISerializable newFile = (NefFile)RuntimeHelpers.GetUninitializedObject(typeof(NefFile));
-            Assert.ThrowsExactly<FormatException>(() => MemoryReaderDeserialize(ms.ToArray(), newFile));
-        }
-
-        file.Script = Array.Empty<byte>();
-        file.CheckSum = NefFile.ComputeChecksum(file);
-        using (MemoryStream ms = new(1024))
-        using (BinaryWriter writer = new(ms))
-        {
-            ((ISerializable)file).Serialize(writer);
-            ISerializable newFile = (NefFile)RuntimeHelpers.GetUninitializedObject(typeof(NefFile));
-            Assert.ThrowsExactly<ArgumentException>(() => MemoryReaderDeserialize(ms.ToArray(), newFile));
-        }
-
-        file.Script = new byte[] { 0x01, 0x02, 0x03 };
-        file.CheckSum = NefFile.ComputeChecksum(file);
-        var data = file.ToArray();
-        var newFile1 = data.AsSerializable<NefFile>();
-        Assert.AreEqual(file.Compiler, newFile1.Compiler);
-        Assert.AreEqual(file.CheckSum, newFile1.CheckSum);
-        Assert.IsTrue(newFile1.Script.Span.SequenceEqual(file.Script.Span));
-
-        static void MemoryReaderDeserialize(byte[] buffer, ISerializable obj)
-        {
-            var reader = new MemoryReader(buffer);
-            obj.Deserialize(ref reader);
-        }
-    }
-
-    [TestMethod]
-    public void TestGetSize()
-    {
-        Assert.AreEqual(4 + 32 + 32 + 2 + 1 + 2 + 4 + 4, file.Size);
-    }
-
-    [TestMethod]
-    public void ParseTest()
-    {
-        var file = new NefFile()
+        public NefFile file = new()
         {
             Compiler = "".PadLeft(32, ' '),
             Source = string.Empty,
@@ -99,52 +30,133 @@ public class UT_NefFile
             Script = new byte[] { 0x01, 0x02, 0x03 }
         };
 
-        file.CheckSum = NefFile.ComputeChecksum(file);
-
-        var data = file.ToArray();
-        file = data.AsSerializable<NefFile>();
-
-        Assert.AreEqual("".PadLeft(32, ' '), file.Compiler);
-        CollectionAssert.AreEqual(new byte[] { 0x01, 0x02, 0x03 }, file.Script.ToArray());
-    }
-
-    [TestMethod]
-    public void LimitTest()
-    {
-        var file = new NefFile()
+        [TestInitialize]
+        public void TestSetup()
         {
-            Compiler = "".PadLeft(byte.MaxValue, ' '),
-            Source = string.Empty,
-            Tokens = Array.Empty<MethodToken>(),
-            Script = new byte[1024 * 1024],
-            CheckSum = 0
-        };
+            file.CheckSum = NefFile.ComputeChecksum(file);
+        }
 
-        // Wrong compiler
+        [TestMethod]
+        public void TestDeserialize()
+        {
+            byte[] wrongMagic = { 0x00, 0x00, 0x00, 0x00 };
+            using (MemoryStream ms = new(1024))
+            using (BinaryWriter writer = new(ms))
+            {
+                ((ISerializable)file).Serialize(writer);
+                ms.Seek(0, SeekOrigin.Begin);
+                ms.Write(wrongMagic, 0, 4);
+                ISerializable newFile = (NefFile)RuntimeHelpers.GetUninitializedObject(typeof(NefFile));
+                void DeserializeWrongMagic()
+                {
+                    MemoryReader reader = new(ms.ToArray());
+                    newFile.Deserialize(ref reader);
+                }
+                Assert.ThrowsExactly<FormatException>(DeserializeWrongMagic);
+            }
 
-        Assert.ThrowsExactly<ArgumentException>(() => _ = file.ToArray());
+            file.CheckSum = 0;
+            using (MemoryStream ms = new(1024))
+            using (BinaryWriter writer = new(ms))
+            {
+                ((ISerializable)file).Serialize(writer);
+                ISerializable newFile = (NefFile)RuntimeHelpers.GetUninitializedObject(typeof(NefFile));
+                void DeserializeBadChecksum()
+                {
+                    MemoryReader reader = new(ms.ToArray());
+                    newFile.Deserialize(ref reader);
+                }
+                Assert.ThrowsExactly<FormatException>(DeserializeBadChecksum);
+            }
 
-        // Wrong script
+            file.Script = Array.Empty<byte>();
+            file.CheckSum = NefFile.ComputeChecksum(file);
+            using (MemoryStream ms = new(1024))
+            using (BinaryWriter writer = new(ms))
+            {
+                ((ISerializable)file).Serialize(writer);
+                ISerializable newFile = (NefFile)RuntimeHelpers.GetUninitializedObject(typeof(NefFile));
+                void DeserializeEmptyScript()
+                {
+                    MemoryReader reader = new(ms.ToArray());
+                    newFile.Deserialize(ref reader);
+                }
+                Assert.ThrowsExactly<ArgumentException>(DeserializeEmptyScript);
+            }
 
-        file.Compiler = "";
-        file.Script = new byte[(1024 * 1024) + 1];
-        var data = file.ToArray();
+            file.Script = new byte[] { 0x01, 0x02, 0x03 };
+            file.CheckSum = NefFile.ComputeChecksum(file);
+            var data = file.ToArray();
+            var newFile1 = data.AsSerializable<NefFile>();
+            Assert.AreEqual(file.Compiler, newFile1.Compiler);
+            Assert.AreEqual(file.CheckSum, newFile1.CheckSum);
+            Assert.IsTrue(newFile1.Script.Span.SequenceEqual(file.Script.Span));
+        }
 
-        Assert.ThrowsExactly<FormatException>(() => _ = data.AsSerializable<NefFile>());
+        [TestMethod]
+        public void TestGetSize()
+        {
+            Assert.AreEqual(4 + 32 + 32 + 2 + 1 + 2 + 4 + 4, file.Size);
+        }
 
-        // Wrong script hash
+        [TestMethod]
+        public void ParseTest()
+        {
+            var file = new NefFile()
+            {
+                Compiler = "".PadLeft(32, ' '),
+                Source = string.Empty,
+                Tokens = Array.Empty<MethodToken>(),
+                Script = new byte[] { 0x01, 0x02, 0x03 }
+            };
 
-        file.Script = new byte[1024 * 1024];
-        data = file.ToArray();
+            file.CheckSum = NefFile.ComputeChecksum(file);
 
-        Assert.ThrowsExactly<FormatException>(() => _ = data.AsSerializable<NefFile>());
+            var data = file.ToArray();
+            file = data.AsSerializable<NefFile>();
 
-        // Wrong checksum
+            Assert.AreEqual("".PadLeft(32, ' '), file.Compiler);
+            Assert.AreSequenceEqual(new byte[] { 0x01, 0x02, 0x03 }, file.Script.ToArray());
+        }
 
-        file.Script = new byte[1024];
-        data = file.ToArray();
-        file.CheckSum = NefFile.ComputeChecksum(file) + 1;
+        [TestMethod]
+        public void LimitTest()
+        {
+            var file = new NefFile()
+            {
+                Compiler = "".PadLeft(byte.MaxValue, ' '),
+                Source = string.Empty,
+                Tokens = Array.Empty<MethodToken>(),
+                Script = new byte[1024 * 1024],
+                CheckSum = 0
+            };
 
-        Assert.ThrowsExactly<FormatException>(() => _ = data.AsSerializable<NefFile>());
+            // Wrong compiler
+
+            Assert.ThrowsExactly<ArgumentException>(() => _ = file.ToArray());
+
+            // Wrong script
+
+            file.Compiler = "";
+            file.Script = new byte[(1024 * 1024) + 1];
+            var data = file.ToArray();
+
+            Assert.ThrowsExactly<FormatException>(() => _ = data.AsSerializable<NefFile>());
+
+            // Wrong script hash
+
+            file.Script = new byte[1024 * 1024];
+            data = file.ToArray();
+
+            Assert.ThrowsExactly<FormatException>(() => _ = data.AsSerializable<NefFile>());
+
+            // Wrong checksum
+
+            file.Script = new byte[1024];
+            data = file.ToArray();
+            file.CheckSum = NefFile.ComputeChecksum(file) + 1;
+
+            Assert.ThrowsExactly<FormatException>(() => _ = data.AsSerializable<NefFile>());
+        }
     }
 }

@@ -9,38 +9,40 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.IO;
 using Neo.SmartContract;
 using Neo.SmartContract.Native;
 using Neo.VM;
 
-namespace Neo.UnitTests.Ledger;
-
-[TestClass]
-public class UT_HashIndexState
+namespace Neo.UnitTests.Ledger
 {
-    HashIndexState origin = null!;
-
-    [TestInitialize]
-    public void Initialize()
+    [TestClass]
+    public class UT_HashIndexState
     {
-        origin = new HashIndexState
+        HashIndexState origin;
+
+        [TestInitialize]
+        public void Initialize()
         {
-            Hash = UInt256.Zero,
-            Index = 10
-        };
-    }
+            origin = new HashIndexState
+            {
+                Hash = UInt256.Zero,
+                Index = 10
+            };
+        }
 
-    [TestMethod]
-    public void TestDeserialize()
-    {
-        var data = BinarySerializer.Serialize(((IInteroperable)origin).ToStackItem(null), ExecutionEngineLimits.Default);
-        var reader = new MemoryReader(data);
+        [TestMethod]
+        public void TestDeserialize()
+        {
+            var data = BinarySerializer.Serialize(((IInteroperable)origin).ToStackItem(), ExecutionEngineLimits.Default);
+            var reader = new MemoryReader(data);
 
-        HashIndexState dest = new();
-        ((IInteroperable)dest).FromStackItem(BinarySerializer.Deserialize(ref reader, ExecutionEngineLimits.Default, null));
+            HashIndexState dest = new();
+            ((IInteroperable)dest).FromStackItem(BinarySerializer.Deserialize(ref reader, ExecutionEngineLimits.Default));
 
-        Assert.AreEqual(origin.Hash, dest.Hash);
-        Assert.AreEqual(origin.Index, dest.Index);
+            Assert.AreEqual(origin.Hash, dest.Hash);
+            Assert.AreEqual(origin.Index, dest.Index);
+        }
     }
 }

@@ -10,83 +10,86 @@
 // modifications are permitted.
 
 using Neo.IO;
+using System;
+using System.IO;
 
-namespace Neo.Network.P2P.Capabilities;
-
-/// <summary>
-/// Represents the capabilities of a Neo node. Each capability has a type
-/// and some type-specific node metadata to other peers that can take it
-/// into account when interacting with this node. This metadata is
-/// serialized in a type-specific way, but for compatibility reasons any
-/// new capabilities MUST be compatible with UnknownCapability serialization
-/// scheme.
-/// </summary>
-public abstract class NodeCapability : ISerializable
+namespace Neo.Network.P2P.Capabilities
 {
     /// <summary>
-    /// Indicates the type of the <see cref="NodeCapability"/>.
+    /// Represents the capabilities of a Neo node. Each capability has a type
+    /// and some type-specific node metadata to other peers that can take it
+    /// into account when interacting with this node. This metadata is
+    /// serialized in a type-specific way, but for compatibility reasons any
+    /// new capabilities MUST be compatible with UnknownCapability serialization
+    /// scheme.
     /// </summary>
-    public readonly NodeCapabilityType Type;
-
-    public virtual int Size => sizeof(NodeCapabilityType); // Type
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="NodeCapability"/> class.
-    /// </summary>
-    /// <param name="type">The type of the <see cref="NodeCapability"/>.</param>
-    protected NodeCapability(NodeCapabilityType type)
+    public abstract class NodeCapability : ISerializable
     {
-        Type = type;
-    }
+        /// <summary>
+        /// Indicates the type of the <see cref="NodeCapability"/>.
+        /// </summary>
+        public readonly NodeCapabilityType Type;
 
-    void ISerializable.Deserialize(ref MemoryReader reader)
-    {
-        var readType = reader.ReadByte();
-        if (readType != (byte)Type)
+        public virtual int Size => sizeof(NodeCapabilityType); // Type
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="NodeCapability"/> class.
+        /// </summary>
+        /// <param name="type">The type of the <see cref="NodeCapability"/>.</param>
+        protected NodeCapability(NodeCapabilityType type)
         {
-            throw new FormatException($"ReadType({readType}) does not match NodeCapabilityType({Type})");
+            Type = type;
         }
 
-        DeserializeWithoutType(ref reader);
-    }
-
-    /// <summary>
-    /// Deserializes an <see cref="NodeCapability"/> object from a <see cref="MemoryReader"/>.
-    /// </summary>
-    /// <param name="reader">The <see cref="MemoryReader"/> for reading data.</param>
-    /// <returns>The deserialized <see cref="NodeCapability"/>.</returns>
-    public static NodeCapability DeserializeFrom(ref MemoryReader reader)
-    {
-        NodeCapabilityType type = (NodeCapabilityType)reader.ReadByte();
-        NodeCapability capability = type switch
+        void ISerializable.Deserialize(ref MemoryReader reader)
         {
-#pragma warning disable CS0618 // Type or member is obsolete
-            NodeCapabilityType.TcpServer or NodeCapabilityType.WsServer => new ServerCapability(type),
-#pragma warning restore CS0618 // Type or member is obsolete
-            NodeCapabilityType.DisableCompression => new DisableCompressionCapability(),
-            NodeCapabilityType.FullNode => new FullNodeCapability(),
-            NodeCapabilityType.ArchivalNode => new ArchivalNodeCapability(),
-            _ => new UnknownCapability(type),
-        };
-        capability.DeserializeWithoutType(ref reader);
-        return capability;
+            var readType = reader.ReadByte();
+            if (readType != (byte)Type)
+            {
+                throw new FormatException($"ReadType({readType}) does not match NodeCapabilityType({Type})");
+            }
+
+            DeserializeWithoutType(ref reader);
+        }
+
+        /// <summary>
+        /// Deserializes an <see cref="NodeCapability"/> object from a <see cref="MemoryReader"/>.
+        /// </summary>
+        /// <param name="reader">The <see cref="MemoryReader"/> for reading data.</param>
+        /// <returns>The deserialized <see cref="NodeCapability"/>.</returns>
+        public static NodeCapability DeserializeFrom(ref MemoryReader reader)
+        {
+            var type = (NodeCapabilityType)reader.ReadByte();
+            NodeCapability capability = type switch
+            {
+#pragma warning disable CS0612 // Type or member is obsolete
+                NodeCapabilityType.TcpServer or NodeCapabilityType.WsServer => new ServerCapability(type),
+#pragma warning restore CS0612 // Type or member is obsolete
+                NodeCapabilityType.FullNode => new FullNodeCapability(),
+                NodeCapabilityType.ArchivalNode => new ArchivalNodeCapability(),
+                NodeCapabilityType.DisableCompression => new DisableCompressionCapability(),
+                _ => new UnknownCapability(type),
+            };
+            capability.DeserializeWithoutType(ref reader);
+            return capability;
+        }
+
+        /// <summary>
+        /// Deserializes the <see cref="NodeCapability"/> object from a <see cref="MemoryReader"/>.
+        /// </summary>
+        /// <param name="reader">The <see cref="MemoryReader"/> for reading data.</param>
+        protected abstract void DeserializeWithoutType(ref MemoryReader reader);
+
+        void ISerializable.Serialize(BinaryWriter writer)
+        {
+            writer.Write((byte)Type);
+            SerializeWithoutType(writer);
+        }
+
+        /// <summary>
+        /// Serializes the <see cref="NodeCapability"/> object to a <see cref="BinaryWriter"/>.
+        /// </summary>
+        /// <param name="writer">The <see cref="BinaryWriter"/> for writing data.</param>
+        protected abstract void SerializeWithoutType(BinaryWriter writer);
     }
-
-    /// <summary>
-    /// Deserializes the <see cref="NodeCapability"/> object from a <see cref="MemoryReader"/>.
-    /// </summary>
-    /// <param name="reader">The <see cref="MemoryReader"/> for reading data.</param>
-    protected abstract void DeserializeWithoutType(ref MemoryReader reader);
-
-    void ISerializable.Serialize(BinaryWriter writer)
-    {
-        writer.Write((byte)Type);
-        SerializeWithoutType(writer);
-    }
-
-    /// <summary>
-    /// Serializes the <see cref="NodeCapability"/> object to a <see cref="BinaryWriter"/>.
-    /// </summary>
-    /// <param name="writer">The <see cref="BinaryWriter"/> for writing data.</param>
-    protected abstract void SerializeWithoutType(BinaryWriter writer);
 }

@@ -13,43 +13,45 @@ using Neo.IO;
 using Neo.Json;
 using Neo.Persistence;
 using Neo.SmartContract.Native;
+using System.IO;
 
-namespace Neo.Network.P2P.Payloads;
-
-public class NotValidBefore : TransactionAttribute
+namespace Neo.Network.P2P.Payloads
 {
-    /// <summary>
-    /// Indicates that the transaction is not valid before this height.
-    /// </summary>
-    public uint Height;
-
-    public override TransactionAttributeType Type => TransactionAttributeType.NotValidBefore;
-
-    public override bool AllowMultiple => false;
-
-    public override int Size => base.Size +
-        sizeof(uint); // Height.
-
-    protected override void DeserializeWithoutType(ref MemoryReader reader)
+    public class NotValidBefore : TransactionAttribute
     {
-        Height = reader.ReadUInt32();
-    }
+        /// <summary>
+        /// Indicates that the transaction is not valid before this height.
+        /// </summary>
+        public uint Height;
 
-    protected override void SerializeWithoutType(BinaryWriter writer)
-    {
-        writer.Write(Height);
-    }
+        public override TransactionAttributeType Type => TransactionAttributeType.NotValidBefore;
 
-    public override JObject ToJson()
-    {
-        JObject json = base.ToJson();
-        json["height"] = Height;
-        return json;
-    }
+        public override bool AllowMultiple => false;
 
-    public override bool Verify(DataCache snapshot, Transaction tx)
-    {
-        var blockHeight = NativeContract.Ledger.CurrentIndex(snapshot);
-        return blockHeight >= Height;
+        public override int Size => base.Size +
+            sizeof(uint); // Height.
+
+        protected override void DeserializeWithoutType(ref MemoryReader reader)
+        {
+            Height = reader.ReadUInt32();
+        }
+
+        protected override void SerializeWithoutType(BinaryWriter writer)
+        {
+            writer.Write(Height);
+        }
+
+        public override JObject ToJson()
+        {
+            JObject json = base.ToJson();
+            json["height"] = Height;
+            return json;
+        }
+
+        public override bool Verify(DataCache snapshot, Transaction tx)
+        {
+            var blockHeight = NativeContract.Ledger.CurrentIndex(snapshot);
+            return blockHeight >= Height;
+        }
     }
 }

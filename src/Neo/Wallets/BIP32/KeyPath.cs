@@ -9,60 +9,63 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Neo.Wallets.BIP32;
-
-internal partial class KeyPath
+namespace Neo.Wallets.BIP32
 {
-    [GeneratedRegex(@"^\s*m(?:\s*/\s*(?<index>\d+)\s*(?<hardened>'?)\s*)*\s*$")]
-    private static partial Regex KeyPathRegex();
-
-    public static KeyPath Master { get; } = new(Array.Empty<uint>());
-    public ImmutableArray<uint> Indices { get; }
-
-    KeyPath(IReadOnlyList<uint> indices)
+    internal partial class KeyPath
     {
-        Indices = indices.ToImmutableArray();
-    }
+        [GeneratedRegex(@"^\s*m(?:\s*/\s*(?<index>\d+)\s*(?<hardened>'?)\s*)*\s*$")]
+        private static partial Regex KeyPathRegex();
 
-    public KeyPath Derive(uint index)
-    {
-        uint[] newIndices = new uint[Indices.Length + 1];
-        Indices.CopyTo(newIndices, 0);
-        newIndices[Indices.Length] = index;
-        return new KeyPath(newIndices);
-    }
+        public static KeyPath Master { get; } = new(Array.Empty<uint>());
+        public ImmutableArray<uint> Indices { get; }
 
-    public static KeyPath Parse(string path)
-    {
-        Match match = KeyPathRegex().Match(path);
-        if (!match.Success) throw new FormatException();
-        int count = match.Groups["index"].Captures.Count;
-        uint[] indices = new uint[count];
-        for (int i = 0; i < count; i++)
+        KeyPath(IReadOnlyList<uint> indices)
         {
-            indices[i] = uint.Parse(match.Groups["index"].Captures[i].Value);
-            if (indices[i] >= 0x80000000) throw new FormatException();
-            bool hardened = match.Groups["hardened"].Captures[i].Length > 0;
-            if (hardened) indices[i] |= 0x80000000;
+            Indices = indices.ToImmutableArray();
         }
-        return new KeyPath(indices);
-    }
 
-    public override string ToString()
-    {
-        StringBuilder builder = new("m");
-        foreach (uint index in Indices)
+        public KeyPath Derive(uint index)
         {
-            builder.Append('/');
-            if ((index & 0x80000000) != 0)
-                builder.Append(index & ~0x80000000).Append('\'');
-            else
-                builder.Append(index);
+            uint[] newIndices = new uint[Indices.Length + 1];
+            Indices.CopyTo(newIndices, 0);
+            newIndices[Indices.Length] = index;
+            return new KeyPath(newIndices);
         }
-        return builder.ToString();
+
+        public static KeyPath Parse(string path)
+        {
+            Match match = KeyPathRegex().Match(path);
+            if (!match.Success) throw new FormatException();
+            int count = match.Groups["index"].Captures.Count;
+            uint[] indices = new uint[count];
+            for (int i = 0; i < count; i++)
+            {
+                indices[i] = uint.Parse(match.Groups["index"].Captures[i].Value);
+                if (indices[i] >= 0x80000000) throw new FormatException();
+                bool hardened = match.Groups["hardened"].Captures[i].Length > 0;
+                if (hardened) indices[i] |= 0x80000000;
+            }
+            return new KeyPath(indices);
+        }
+
+        public override string ToString()
+        {
+            StringBuilder builder = new("m");
+            foreach (uint index in Indices)
+            {
+                builder.Append('/');
+                if ((index & 0x80000000) != 0)
+                    builder.Append(index & ~0x80000000).Append('\'');
+                else
+                    builder.Append(index);
+            }
+            return builder.ToString();
+        }
     }
 }

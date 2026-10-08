@@ -11,45 +11,46 @@
 
 using System.Runtime.CompilerServices;
 
-namespace Neo.SmartContract;
-
-[AsyncMethodBuilder(typeof(ContractTaskMethodBuilder))]
-class ContractTask
+namespace Neo.SmartContract
 {
-    protected readonly ContractTaskAwaiter Awaiter;
-
-    public static ContractTask CompletedTask { get; }
-
-    static ContractTask()
+    [AsyncMethodBuilder(typeof(ContractTaskMethodBuilder))]
+    class ContractTask
     {
-        CompletedTask = new ContractTask();
-        CompletedTask.GetAwaiter().SetResult();
+        protected readonly ContractTaskAwaiter _awaiter;
+
+        public static ContractTask CompletedTask { get; }
+
+        static ContractTask()
+        {
+            CompletedTask = new ContractTask();
+            CompletedTask.GetAwaiter().SetResult();
+        }
+
+        public ContractTask()
+        {
+            _awaiter = CreateAwaiter();
+        }
+
+        protected virtual ContractTaskAwaiter CreateAwaiter() => new();
+        public ContractTaskAwaiter GetAwaiter() => _awaiter;
+        public virtual object? GetResult() => null;
     }
 
-    public ContractTask()
+    [AsyncMethodBuilder(typeof(ContractTaskMethodBuilder<>))]
+    class ContractTask<T> : ContractTask
     {
-        Awaiter = CreateAwaiter();
-    }
+        public new static ContractTask<T> CompletedTask { get; }
 
-    protected virtual ContractTaskAwaiter CreateAwaiter() => new();
-    public ContractTaskAwaiter GetAwaiter() => Awaiter;
-    public virtual object? GetResult() => null;
-}
+        static ContractTask()
+        {
+            CompletedTask = new ContractTask<T>();
+            CompletedTask.GetAwaiter().SetResult();
+        }
 
-[AsyncMethodBuilder(typeof(ContractTaskMethodBuilder<>))]
-class ContractTask<T> : ContractTask
-{
-    public new static ContractTask<T> CompletedTask { get; }
-
-    static ContractTask()
-    {
-        CompletedTask = new ContractTask<T>();
-        CompletedTask.GetAwaiter().SetResult();
-    }
-
-    protected override ContractTaskAwaiter CreateAwaiter() => new ContractTaskAwaiter<T>();
+        protected override ContractTaskAwaiter CreateAwaiter() => new ContractTaskAwaiter<T>();
 #pragma warning disable CS0108 // Member hides inherited member; missing new keyword
-    public ContractTaskAwaiter<T> GetAwaiter() => (ContractTaskAwaiter<T>)Awaiter;
+        public ContractTaskAwaiter<T> GetAwaiter() => (ContractTaskAwaiter<T>)_awaiter;
 #pragma warning restore CS0108 // Member hides inherited member; missing new keyword
-    public override object? GetResult() => GetAwaiter().GetResult();
+        public override object? GetResult() => GetAwaiter().GetResult();
+    }
 }

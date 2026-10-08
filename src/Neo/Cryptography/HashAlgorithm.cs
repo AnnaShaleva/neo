@@ -9,22 +9,23 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.Cryptography;
-
-public enum HashAlgorithm : byte
+namespace Neo.Cryptography
 {
-    /// <summary>
-    /// The SHA256 hash algorithm.
-    /// </summary>
-    SHA256 = 0x00,
+    public enum HashAlgorithm : byte
+    {
+        /// <summary>
+        /// The SHA256 hash algorithm.
+        /// </summary>
+        SHA256 = 0x00,
 
-    /// <summary>
-    /// The Keccak256 hash algorithm.
-    /// </summary>
-    Keccak256 = 0x01,
+        /// <summary>
+        /// The Keccak256 hash algorithm.
+        /// </summary>
+        Keccak256 = 0x01,
 
-    /// <summary>
-    /// The SHA512 hash algorithm.
-    /// </summary>
-    SHA512 = 0x02
+        /// <summary>
+        /// The SHA512 hash algorithm.
+        /// </summary>
+        SHA512 = 0x02
+    }
 }

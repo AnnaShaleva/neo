@@ -9,28 +9,32 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.Wallets.NEP6;
+using System;
+using System.IO;
 
-class NEP6WalletFactory : IWalletFactory
+namespace Neo.Wallets.NEP6
 {
-    public static readonly NEP6WalletFactory Instance = new();
-
-    public bool Handle(string path)
+    class NEP6WalletFactory : IWalletFactory
     {
-        return Path.GetExtension(path).Equals(".json", StringComparison.InvariantCultureIgnoreCase);
-    }
+        public static readonly NEP6WalletFactory Instance = new();
 
-    public Wallet CreateWallet(string? name, string path, string password, ProtocolSettings settings)
-    {
-        if (File.Exists(path))
-            throw new InvalidOperationException("The wallet file already exists.");
-        var wallet = new NEP6Wallet(path, password, settings, name);
-        wallet.Save();
-        return wallet;
-    }
+        public bool Handle(string path)
+        {
+            return Path.GetExtension(path).Equals(".json", StringComparison.InvariantCultureIgnoreCase);
+        }
 
-    public Wallet OpenWallet(string path, string? password, ProtocolSettings settings)
-    {
-        return new NEP6Wallet(path, password, settings);
+        public Wallet CreateWallet(string? name, string path, string password, ProtocolSettings settings)
+        {
+            if (File.Exists(path))
+                throw new InvalidOperationException("The wallet file already exists.");
+            NEP6Wallet wallet = new NEP6Wallet(path, password, settings, name);
+            wallet.Save();
+            return wallet;
+        }
+
+        public Wallet OpenWallet(string path, string? password, ProtocolSettings settings)
+        {
+            return new NEP6Wallet(path, password, settings);
+        }
     }
 }

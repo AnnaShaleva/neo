@@ -9,10 +9,11 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.SmartContract.Native;
-
-internal interface IHardforkActivable
+namespace Neo.SmartContract.Native
 {
-    public Hardfork? ActiveIn { get; }
-    public Hardfork? DeprecatedIn { get; }
+    internal interface IHardforkActivable
+    {
+        public Hardfork? ActiveIn { get; }
+        public Hardfork? DeprecatedIn { get; }
+    }
 }

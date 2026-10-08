@@ -11,38 +11,40 @@
 
 using Neo.Network.P2P.Payloads;
 using Neo.Network.P2P.Payloads.Conditions;
+using System;
 
-namespace Neo.Builders;
-
-public sealed class WitnessRuleBuilder
+namespace Neo.Builders
 {
-    private readonly WitnessRuleAction _action;
-    private WitnessCondition? _condition;
-
-    private WitnessRuleBuilder(WitnessRuleAction action)
+    public sealed class WitnessRuleBuilder
     {
-        _action = action;
-    }
+        private readonly WitnessRuleAction _action;
+        private WitnessCondition? _condition;
 
-    public static WitnessRuleBuilder Create(WitnessRuleAction action)
-    {
-        return new WitnessRuleBuilder(action);
-    }
-
-    public WitnessRuleBuilder AddCondition(Action<WitnessConditionBuilder> config)
-    {
-        var cb = WitnessConditionBuilder.Create();
-        config(cb);
-        _condition = cb.Build();
-        return this;
-    }
-
-    public WitnessRule Build()
-    {
-        return new()
+        private WitnessRuleBuilder(WitnessRuleAction action)
         {
-            Action = _action,
-            Condition = _condition ?? throw new InvalidOperationException("Condition is not set."),
-        };
+            _action = action;
+        }
+
+        public static WitnessRuleBuilder Create(WitnessRuleAction action)
+        {
+            return new WitnessRuleBuilder(action);
+        }
+
+        public WitnessRuleBuilder AddCondition(Action<WitnessConditionBuilder> config)
+        {
+            var cb = WitnessConditionBuilder.Create();
+            config(cb);
+            _condition = cb.Build();
+            return this;
+        }
+
+        public WitnessRule Build()
+        {
+            return new()
+            {
+                Action = _action,
+                Condition = _condition ?? throw new InvalidOperationException("Condition is not set."),
+            };
+        }
     }
 }

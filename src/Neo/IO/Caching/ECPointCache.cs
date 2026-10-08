@@ -10,16 +10,18 @@
 // modifications are permitted.
 
 using Neo.Cryptography.ECC;
+using Neo.Extensions;
 
-namespace Neo.IO.Caching;
-
-internal class ECPointCache : FIFOCache<byte[], ECPoint>
+namespace Neo.IO.Caching
 {
-    public ECPointCache(int maxCapacity)
-        : base(maxCapacity, ByteArrayEqualityComparer.Default) { }
-
-    protected override byte[] GetKeyForItem(ECPoint item)
+    internal class ECPointCache : FIFOCache<byte[], ECPoint>
     {
-        return item.EncodePoint(true);
+        public ECPointCache(int maxCapacity)
+            : base(maxCapacity, ByteArrayEqualityComparer.Default) { }
+
+        protected override byte[] GetKeyForItem(ECPoint item)
+        {
+            return item.EncodePoint(true);
+        }
     }
 }

@@ -10,86 +10,105 @@
 // modifications are permitted.
 
 using Neo.Cryptography.ECC;
-using Neo.Extensions.IO;
+using Neo.Extensions;
 using Neo.Persistence;
 using Neo.VM;
 using Neo.VM.Types;
+using System;
+using System.Linq;
 
-namespace Neo.SmartContract.Native;
-
-/// <summary>
-/// A native contract for managing roles in NEO system.
-/// </summary>
-[ContractEvent(0, name: "Designation",
-    "Role", ContractParameterType.Integer,
-    "BlockIndex", ContractParameterType.Integer,
-    "Old", ContractParameterType.Array,
-    "New", ContractParameterType.Array
-    )]
-public sealed class RoleManagement : NativeContract
+namespace Neo.SmartContract.Native
 {
-    internal RoleManagement() : base(-8) { }
-
     /// <summary>
-    /// Gets the list of nodes for the specified role.
+    /// A native contract for managing roles in NEO system.
     /// </summary>
-    /// <param name="snapshot">The snapshot used to read data.</param>
-    /// <param name="role">The type of the role.</param>
-    /// <param name="index">The index of the block to be queried.</param>
-    /// <returns>The public keys of the nodes.</returns>
-    [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.ReadStates)]
-    public ECPoint[] GetDesignatedByRole(IReadOnlyStore snapshot, Role role, uint index)
+    public sealed class RoleManagement : NativeContract
     {
-        if (!Enum.IsDefined(role))
-            throw new ArgumentOutOfRangeException(nameof(role), $"Role {role} is not valid");
+        [ContractEvent(0, name: "Designation",
+            "Role", ContractParameterType.Integer,
+            "BlockIndex", ContractParameterType.Integer,
+            Hardfork.HF_Echidna)]
 
-        var currentIndex = Ledger.CurrentIndex(snapshot);
-        if (currentIndex + 1 < index)
-            throw new ArgumentOutOfRangeException(nameof(index), $"Index {index} exceeds current index + 1 ({currentIndex + 1})");
-        var key = CreateStorageKey((byte)role, index);
-        var boundary = CreateStorageKey((byte)role);
-        return snapshot.FindRange(key, boundary, SeekDirection.Backward)
-            .Select(u => u.Value.GetInteroperable<NodeList>().ToArray())
-            .FirstOrDefault() ?? [];
-    }
+        [ContractEvent(Hardfork.HF_Echidna, 0, name: "Designation",
+            "Role", ContractParameterType.Integer,
+            "BlockIndex", ContractParameterType.Integer,
+            "Old", ContractParameterType.Array,
+            "New", ContractParameterType.Array
+            )]
 
-    [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.States | CallFlags.AllowNotify)]
-    private void DesignateAsRole(ApplicationEngine engine, Role role, ECPoint[] nodes)
-    {
-        if (nodes.Length == 0 || nodes.Length > 32)
-            throw new ArgumentException($"Nodes count {nodes.Length} must be between 1 and 32", nameof(nodes));
-        if (!Enum.IsDefined(role))
-            throw new ArgumentOutOfRangeException(nameof(role), $"Role {role} is not valid");
-        AssertCommittee(engine);
+        internal RoleManagement() : base() { }
 
-        if (engine.PersistingBlock is null)
-            throw new InvalidOperationException("Persisting block is null");
-        var index = engine.PersistingBlock.Index + 1;
-        var key = CreateStorageKey((byte)role, index);
-        if (engine.SnapshotCache.Contains(key))
-            throw new InvalidOperationException("Role already designated");
-
-        if (nodes.Distinct().Count() != nodes.Length)
-            throw new InvalidOperationException($"Duplicate public keys are not allowed");
-
-        NodeList list = new();
-        list.AddRange(nodes);
-        list.Sort();
-        engine.SnapshotCache.Add(key, new StorageItem(list));
-        var oldNodes = GetDesignatedByRole(engine.SnapshotCache, role, index - 1);
-        Notify(engine, "Designation", role, engine.PersistingBlock.Index, oldNodes, nodes);
-    }
-
-    private class NodeList : InteroperableList<ECPoint>
-    {
-        protected override ECPoint ElementFromStackItem(StackItem item)
+        /// <summary>
+        /// Gets the list of nodes for the specified role.
+        /// </summary>
+        /// <param name="snapshot">The snapshot used to read data.</param>
+        /// <param name="role">The type of the role.</param>
+        /// <param name="index">The index of the block to be queried.</param>
+        /// <returns>The public keys of the nodes.</returns>
+        [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.ReadStates)]
+        public ECPoint[] GetDesignatedByRole(DataCache snapshot, Role role, uint index)
         {
-            return ECPoint.DecodePoint(item.GetSpan(), ECCurve.Secp256r1);
+            if (!Enum.IsDefined(typeof(Role), role))
+                throw new ArgumentOutOfRangeException(nameof(role), $"Role {role} is not valid");
+
+            var currentIndex = Ledger.CurrentIndex(snapshot);
+            if (currentIndex + 1 < index)
+                throw new ArgumentOutOfRangeException(nameof(index), $"Index {index} exceeds current index + 1 ({currentIndex + 1})");
+            var key = CreateStorageKey((byte)role, index).ToArray();
+            var boundary = CreateStorageKey((byte)role).ToArray();
+            return snapshot.FindRange(key, boundary, SeekDirection.Backward)
+                .Select(u => u.Value.GetInteroperable<NodeList>().ToArray())
+                .FirstOrDefault() ?? [];
         }
 
-        protected override StackItem ElementToStackItem(ECPoint element, IReferenceCounter? referenceCounter)
+        [ContractMethod(CpuFee = 1 << 15, RequiredCallFlags = CallFlags.States | CallFlags.AllowNotify)]
+        private void DesignateAsRole(ApplicationEngine engine, Role role, ECPoint[] nodes)
         {
-            return element.ToArray();
+            if (nodes.Length == 0 || nodes.Length > 32)
+                throw new ArgumentException($"Nodes count {nodes.Length} must be between 1 and 32", nameof(nodes));
+            if (!Enum.IsDefined(typeof(Role), role))
+                throw new ArgumentOutOfRangeException(nameof(role), $"Role {role} is not valid");
+            AssertCommittee(engine);
+
+            if (engine.PersistingBlock is null)
+                throw new InvalidOperationException("Persisting block is null");
+
+            var index = engine.PersistingBlock.Index + 1;
+            var key = CreateStorageKey((byte)role, index);
+            if (engine.SnapshotCache.Contains(key))
+                throw new InvalidOperationException("Role already designated");
+
+            var deduplicated = nodes.Distinct().Count();
+            if (deduplicated != nodes.Length) throw new InvalidOperationException($"Duplicate publickeys are not allowed");
+
+            NodeList list = new();
+            list.AddRange(nodes);
+            list.Sort();
+            engine.SnapshotCache.Add(key, new StorageItem(list));
+            if (engine.IsHardforkEnabled(Hardfork.HF_Echidna))
+            {
+                var oldNodes = new VM.Types.Array(GetDesignatedByRole(engine.SnapshotCache, role, index - 1).Select(u => (ByteString)u.EncodePoint(true)));
+                var newNodes = new VM.Types.Array(nodes.Select(u => (ByteString)u.EncodePoint(true)));
+
+                engine.SendNotification(Hash, "Designation", new VM.Types.Array([(int)role, engine.PersistingBlock.Index, oldNodes, newNodes]));
+            }
+            else
+            {
+                engine.SendNotification(Hash, "Designation", new VM.Types.Array([(int)role, engine.PersistingBlock.Index]));
+            }
+        }
+
+        private class NodeList : InteroperableList<ECPoint>
+        {
+            protected override ECPoint ElementFromStackItem(StackItem item)
+            {
+                return ECPoint.DecodePoint(item.GetSpan(), ECCurve.Secp256r1);
+            }
+
+            protected override StackItem ElementToStackItem(ECPoint element)
+            {
+                return element.ToArray();
+            }
         }
     }
 }

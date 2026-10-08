@@ -11,35 +11,36 @@
 
 using Serilog.Events;
 
-namespace Neo;
-
-/// <summary>
-/// Represents the level of logs.
-/// </summary>
-public enum LogLevel : byte
+namespace Neo
 {
     /// <summary>
-    /// The debug log level.
+    /// Represents the level of logs.
     /// </summary>
-    Debug = LogEventLevel.Debug,
+    public enum LogLevel : byte
+    {
+        /// <summary>
+        /// The debug log level.
+        /// </summary>
+        Debug = LogEventLevel.Debug,
 
-    /// <summary>
-    /// The information log level.
-    /// </summary>
-    Info = LogEventLevel.Information,
+        /// <summary>
+        /// The information log level.
+        /// </summary>
+        Info = LogEventLevel.Information,
 
-    /// <summary>
-    /// The warning log level.
-    /// </summary>
-    Warning = LogEventLevel.Warning,
+        /// <summary>
+        /// The warning log level.
+        /// </summary>
+        Warning = LogEventLevel.Warning,
 
-    /// <summary>
-    /// The error log level.
-    /// </summary>
-    Error = LogEventLevel.Error,
+        /// <summary>
+        /// The error log level.
+        /// </summary>
+        Error = LogEventLevel.Error,
 
-    /// <summary>
-    /// The fatal log level.
-    /// </summary>
-    Fatal = LogEventLevel.Fatal
+        /// <summary>
+        /// The fatal log level.
+        /// </summary>
+        Fatal = LogEventLevel.Fatal
+    }
 }

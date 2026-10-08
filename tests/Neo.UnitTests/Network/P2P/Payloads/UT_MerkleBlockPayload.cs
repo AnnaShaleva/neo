@@ -9,44 +9,46 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.Extensions;
-using Neo.Extensions.IO;
 using Neo.Network.P2P.Payloads;
+using System;
 using System.Collections;
 
-namespace Neo.UnitTests.Network.P2P.Payloads;
-
-[TestClass]
-public class UT_MerkleBlockPayload
+namespace Neo.UnitTests.Network.P2P.Payloads
 {
-    private NeoSystem _system = null!;
-
-    [TestInitialize]
-    public void TestSetup()
+    [TestClass]
+    public class UT_MerkleBlockPayload
     {
-        _system = TestBlockchain.GetSystem();
-    }
+        private NeoSystem _system;
 
-    [TestMethod]
-    public void Size_Get()
-    {
-        var test = MerkleBlockPayload.Create(_system.GenesisBlock, new BitArray(1024, false));
-        Assert.AreEqual(247, test.Size); // 239 + nonce
+        [TestInitialize]
+        public void TestSetup()
+        {
+            _system = TestBlockchain.GetSystem();
+        }
 
-        test = MerkleBlockPayload.Create(_system.GenesisBlock, new BitArray(0, false));
-        Assert.AreEqual(119, test.Size); // 111 + nonce
-    }
+        [TestMethod]
+        public void Size_Get()
+        {
+            var test = MerkleBlockPayload.Create(_system.GenesisBlock, new BitArray(1024, false));
+            Assert.AreEqual(247, test.Size); // 239 + nonce
 
-    [TestMethod]
-    public void DeserializeAndSerialize()
-    {
-        var test = MerkleBlockPayload.Create(_system.GenesisBlock, new BitArray(2, false));
-        var clone = test.ToArray().AsSerializable<MerkleBlockPayload>();
+            test = MerkleBlockPayload.Create(_system.GenesisBlock, new BitArray(0, false));
+            Assert.AreEqual(119, test.Size); // 111 + nonce
+        }
 
-        Assert.AreEqual(test.TxCount, clone.TxCount);
-        Assert.HasCount(test.Hashes.Length, clone.Hashes);
-        Assert.AreEqual(test.Flags.Length, clone.Flags.Length);
-        CollectionAssert.AreEqual(test.Hashes, clone.Hashes);
-        Assert.IsTrue(test.Flags.Span.SequenceEqual(clone.Flags.Span));
+        [TestMethod]
+        public void DeserializeAndSerialize()
+        {
+            var test = MerkleBlockPayload.Create(_system.GenesisBlock, new BitArray(2, false));
+            var clone = test.ToArray().AsSerializable<MerkleBlockPayload>();
+
+            Assert.AreEqual(test.TxCount, clone.TxCount);
+            Assert.AreEqual(test.Hashes.Length, clone.Hashes.Length);
+            Assert.AreEqual(test.Flags.Length, clone.Flags.Length);
+            Assert.AreSequenceEqual(test.Hashes, clone.Hashes);
+            Assert.IsTrue(test.Flags.Span.SequenceEqual(clone.Flags.Span));
+        }
     }
 }

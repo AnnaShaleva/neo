@@ -9,39 +9,41 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using System;
 using System.Runtime.InteropServices;
 using System.Security;
 
-namespace Neo;
-
-public static class SecureStringExtensions
+namespace Neo.Extensions
 {
-    public static string GetClearText(this SecureString secureString)
+    public static class SecureStringExtensions
     {
-        var unmanagedStringPtr = IntPtr.Zero;
+        public static string GetClearText(this SecureString secureString)
+        {
+            var unmanagedStringPtr = IntPtr.Zero;
 
-        try
-        {
-            unmanagedStringPtr = Marshal.SecureStringToGlobalAllocUnicode(secureString);
-            return Marshal.PtrToStringUni(unmanagedStringPtr)!;
-        }
-        finally
-        {
-            Marshal.ZeroFreeGlobalAllocUnicode(unmanagedStringPtr);
-        }
-    }
-
-    public static SecureString ToSecureString(this string value, bool asReadOnly = true)
-    {
-        unsafe
-        {
-            fixed (char* passwordChars = value)
+            try
             {
-                var securePasswordString = new SecureString(passwordChars, value.Length);
+                unmanagedStringPtr = Marshal.SecureStringToGlobalAllocUnicode(secureString);
+                return Marshal.PtrToStringUni(unmanagedStringPtr)!;
+            }
+            finally
+            {
+                Marshal.ZeroFreeGlobalAllocUnicode(unmanagedStringPtr);
+            }
+        }
 
-                if (asReadOnly)
-                    securePasswordString.MakeReadOnly();
-                return securePasswordString;
+        public static SecureString ToSecureString(this string value, bool asReadOnly = true)
+        {
+            unsafe
+            {
+                fixed (char* passwordChars = value)
+                {
+                    var securePasswordString = new SecureString(passwordChars, value.Length);
+
+                    if (asReadOnly)
+                        securePasswordString.MakeReadOnly();
+                    return securePasswordString;
+                }
             }
         }
     }

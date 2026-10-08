@@ -11,49 +11,51 @@
 
 using Akka.Actor;
 using Akka.TestKit.MsTest;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.Network.P2P;
 using Neo.Network.P2P.Payloads;
 
-namespace Neo.UnitTests.Network.P2P;
-
-[TestClass]
-public class UT_TaskManagerMailbox : TestKit
+namespace Neo.UnitTests.Network.P2P
 {
-    TaskManagerMailbox uut = null!;
-
-    [TestCleanup]
-    public void Cleanup()
+    [TestClass]
+    public class UT_TaskManagerMailbox : TestKit
     {
-        Shutdown();
-    }
+        TaskManagerMailbox uut;
 
-    [TestInitialize]
-    public void TestSetup()
-    {
-        ActorSystem system = Sys;
-        var config = DefaultConfig;
-        var akkaSettings = new Settings(system, config);
-        uut = new TaskManagerMailbox(akkaSettings, config);
-    }
+        [TestCleanup]
+        public void Cleanup()
+        {
+            Shutdown();
+        }
 
-    [TestMethod]
-    public void TaskManager_Test_IsHighPriority()
-    {
-        // high priority
-        Assert.IsTrue(uut.IsHighPriority(new TaskManager.Register(null!)));
-        Assert.IsTrue(uut.IsHighPriority(new TaskManager.RestartTasks(null!)));
+        [TestInitialize]
+        public void TestSetup()
+        {
+            ActorSystem system = Sys;
+            var config = DefaultConfig;
+            var akkaSettings = new Settings(system, config);
+            uut = new TaskManagerMailbox(akkaSettings, config);
+        }
 
-        // low priority
-        // -> NewTasks: generic InvPayload
-        Assert.IsFalse(uut.IsHighPriority(new TaskManager.NewTasks(new InvPayload { Hashes = null! })));
+        [TestMethod]
+        public void TaskManager_Test_IsHighPriority()
+        {
+            // high priority
+            Assert.IsTrue(uut.IsHighPriority(new TaskManager.Register(null!)));
+            Assert.IsTrue(uut.IsHighPriority(new TaskManager.RestartTasks(null!)));
 
-        // high priority
-        // -> NewTasks: payload Block or Consensus
-        Assert.IsTrue(uut.IsHighPriority(new TaskManager.NewTasks(new InvPayload { Type = InventoryType.Block, Hashes = null! })));
-        Assert.IsTrue(uut.IsHighPriority(new TaskManager.NewTasks(new InvPayload { Type = InventoryType.Extensible, Hashes = null! })));
+            // low priority
+            // -> NewTasks: generic InvPayload
+            Assert.IsFalse(uut.IsHighPriority(new TaskManager.NewTasks(new InvPayload { Hashes = null! })));
 
-        // any random object should not have priority
-        object obj = null!;
-        Assert.IsFalse(uut.IsHighPriority(obj));
+            // high priority
+            // -> NewTasks: payload Block or Consensus
+            Assert.IsTrue(uut.IsHighPriority(new TaskManager.NewTasks(new InvPayload { Type = InventoryType.Block, Hashes = null! })));
+            Assert.IsTrue(uut.IsHighPriority(new TaskManager.NewTasks(new InvPayload { Type = InventoryType.Extensible, Hashes = null! })));
+
+            // any random object should not have priority
+            object obj = null;
+            Assert.IsFalse(uut.IsHighPriority(obj));
+        }
     }
 }

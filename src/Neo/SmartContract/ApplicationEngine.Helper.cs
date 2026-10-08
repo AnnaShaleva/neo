@@ -11,43 +11,46 @@
 
 using Neo.SmartContract.Native;
 using Neo.VM;
+using System;
+using System.Linq;
 using System.Text;
 
-namespace Neo.SmartContract;
-
-public partial class ApplicationEngine : ExecutionEngine
+namespace Neo.SmartContract
 {
-    public string GetEngineStackInfoOnFault(bool exceptionStackTrace = true, bool exceptionMessage = true)
+    public partial class ApplicationEngine : ExecutionEngine
     {
-        if (State != VMState.FAULT || FaultException == null)
-            return "";
-        StringBuilder traceback = new();
-        if (CallingScriptHash != null)
-            traceback.AppendLine($"CallingScriptHash={CallingScriptHash}[{NativeContract.ContractManagement.GetContract(SnapshotCache, CallingScriptHash)?.Manifest.Name}]");
-        traceback.AppendLine($"CurrentScriptHash={CurrentScriptHash}[{NativeContract.ContractManagement.GetContract(SnapshotCache, CurrentScriptHash!)?.Manifest.Name}]");
-        traceback.AppendLine($"EntryScriptHash={EntryScriptHash}");
-
-        foreach (VM.ExecutionContext context in InvocationStack.Reverse())
+        public string GetEngineStackInfoOnFault(bool exceptionStackTrace = true, bool exceptionMessage = true)
         {
-            UInt160 contextScriptHash = context.GetScriptHash();
-            string? contextContractName = NativeContract.ContractManagement.GetContract(SnapshotCache, contextScriptHash)?.Manifest.Name;
-            traceback.AppendLine($"\tInstructionPointer={context.InstructionPointer}, OpCode {context.CurrentInstruction?.OpCode}, Script Length={context.Script.Length} {contextScriptHash}[{contextContractName}]");
+            if (State != VMState.FAULT || FaultException == null)
+                return "";
+            StringBuilder traceback = new();
+            if (CallingScriptHash != null)
+                traceback.AppendLine($"CallingScriptHash={CallingScriptHash}[{NativeContract.ContractManagement.GetContract(SnapshotCache, CallingScriptHash)?.Manifest.Name}]");
+            traceback.AppendLine($"CurrentScriptHash={CurrentScriptHash}[{NativeContract.ContractManagement.GetContract(SnapshotCache, CurrentScriptHash!)?.Manifest.Name}]");
+            traceback.AppendLine($"EntryScriptHash={EntryScriptHash}");
+
+            foreach (ExecutionContext context in InvocationStack.Reverse())
+            {
+                UInt160 contextScriptHash = context.GetScriptHash();
+                string? contextContractName = NativeContract.ContractManagement.GetContract(SnapshotCache, contextScriptHash)?.Manifest.Name;
+                traceback.AppendLine($"\tInstructionPointer={context.InstructionPointer}, OpCode {context.CurrentInstruction?.OpCode}, Script Length={context.Script.Length} {contextScriptHash}[{contextContractName}]");
+            }
+            traceback.Append(GetEngineExceptionInfo(exceptionStackTrace: exceptionStackTrace, exceptionMessage: exceptionMessage));
+
+            return traceback.ToString();
         }
-        traceback.Append(GetEngineExceptionInfo(exceptionStackTrace: exceptionStackTrace, exceptionMessage: exceptionMessage));
 
-        return traceback.ToString();
-    }
-
-    public string GetEngineExceptionInfo(bool exceptionStackTrace = true, bool exceptionMessage = true)
-    {
-        if (State != VMState.FAULT || FaultException == null)
-            return "";
-        StringBuilder traceback = new();
-        Exception baseException = FaultException.GetBaseException();
-        if (exceptionStackTrace)
-            traceback.AppendLine(baseException.StackTrace);
-        if (exceptionMessage)
-            traceback.AppendLine(baseException.Message);
-        return traceback.ToString();
+        public string GetEngineExceptionInfo(bool exceptionStackTrace = true, bool exceptionMessage = true)
+        {
+            if (State != VMState.FAULT || FaultException == null)
+                return "";
+            StringBuilder traceback = new();
+            Exception baseException = FaultException.GetBaseException();
+            if (exceptionStackTrace)
+                traceback.AppendLine(baseException.StackTrace);
+            if (exceptionMessage)
+                traceback.AppendLine(baseException.Message);
+            return traceback.ToString();
+        }
     }
 }

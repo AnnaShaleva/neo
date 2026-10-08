@@ -9,62 +9,65 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-using Neo.Extensions.IO;
+using Neo.Extensions;
 using Neo.IO;
 using Neo.Json;
 using Neo.Persistence;
 using Neo.SmartContract.Native;
+using System.IO;
+using System.Linq;
 
-namespace Neo.Network.P2P.Payloads;
-
-public class Conflicts : TransactionAttribute
+namespace Neo.Network.P2P.Payloads
 {
-    /// <summary>
-    /// Indicates the conflict transaction hash.
-    /// </summary>
-    public required UInt256 Hash;
-
-    public override TransactionAttributeType Type => TransactionAttributeType.Conflicts;
-
-    public override bool AllowMultiple => true;
-
-    public override int Size => base.Size + Hash.Size;
-
-    protected override void DeserializeWithoutType(ref MemoryReader reader)
+    public class Conflicts : TransactionAttribute
     {
-        Hash = reader.ReadSerializable<UInt256>();
-    }
+        /// <summary>
+        /// Indicates the conflict transaction hash.
+        /// </summary>
+        public required UInt256 Hash;
 
-    protected override void SerializeWithoutType(BinaryWriter writer)
-    {
-        writer.Write(Hash);
-    }
+        public override TransactionAttributeType Type => TransactionAttributeType.Conflicts;
 
-    public override JObject ToJson()
-    {
-        JObject json = base.ToJson();
-        json["hash"] = Hash.ToString();
-        return json;
-    }
+        public override bool AllowMultiple => true;
 
-    public override bool Verify(DataCache snapshot, Transaction tx)
-    {
-        // Ensure that there are no duplicated conflicting transactions in the attributes.
+        public override int Size => base.Size + Hash.Size;
 
-        var conflicts = tx.Attributes.Where(u => u is Conflicts).Cast<Conflicts>().ToArray();
-        if (conflicts.Length != conflicts.Select(u => u.Hash).Distinct().Count())
+        protected override void DeserializeWithoutType(ref MemoryReader reader)
         {
-            return false;
+            Hash = reader.ReadSerializable<UInt256>();
         }
 
-        // Only check if conflicting transaction is on chain. It's OK if the
-        // conflicting transaction was in the Conflicts attribute of some other
-        // on-chain transaction.
-        return !NativeContract.Ledger.ContainsTransaction(snapshot, Hash);
-    }
+        protected override void SerializeWithoutType(BinaryWriter writer)
+        {
+            writer.Write(Hash);
+        }
 
-    public override long CalculateNetworkFee(DataCache snapshot, Transaction tx)
-    {
-        return tx.Signers.Length * base.CalculateNetworkFee(snapshot, tx);
+        public override JObject ToJson()
+        {
+            JObject json = base.ToJson();
+            json["hash"] = Hash.ToString();
+            return json;
+        }
+
+        public override bool Verify(DataCache snapshot, Transaction tx)
+        {
+            // Ensure that there are no duplicated conflicting transactions in the attributes.
+
+            var conflicts = tx.Attributes.Where(u => u is Conflicts).Cast<Conflicts>().ToArray();
+            if (conflicts.Length != conflicts.Select(u => u.Hash).Distinct().Count())
+            {
+                return false;
+            }
+
+            // Only check if conflicting transaction is on chain. It's OK if the
+            // conflicting transaction was in the Conflicts attribute of some other
+            // on-chain transaction.
+            return !NativeContract.Ledger.ContainsTransaction(snapshot, Hash);
+        }
+
+        public override long CalculateNetworkFee(DataCache snapshot, Transaction tx)
+        {
+            return tx.Signers.Length * base.CalculateNetworkFee(snapshot, tx);
+        }
     }
 }

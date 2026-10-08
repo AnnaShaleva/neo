@@ -9,23 +9,25 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.SmartContract.Manifest;
 
-namespace Neo.UnitTests.SmartContract.Manifest;
-
-[TestClass]
-public class UT_ContractEventDescriptor
+namespace Neo.UnitTests.SmartContract.Manifest
 {
-    [TestMethod]
-    public void TestFromJson()
+    [TestClass]
+    public class UT_ContractEventDescriptor
     {
-        var expected = new ContractEventDescriptor
+        [TestMethod]
+        public void TestFromJson()
         {
-            Name = "AAA",
-            Parameters = [],
-        };
-        var actual = ContractEventDescriptor.FromJson(expected.ToJson());
-        Assert.AreEqual(expected.Name, actual.Name);
-        Assert.IsEmpty(actual.Parameters);
+            var expected = new ContractEventDescriptor
+            {
+                Name = "AAA",
+                Parameters = [],
+            };
+            var actual = ContractEventDescriptor.FromJson(expected.ToJson());
+            Assert.AreEqual(expected.Name, actual.Name);
+            Assert.IsEmpty(actual.Parameters);
+        }
     }
 }

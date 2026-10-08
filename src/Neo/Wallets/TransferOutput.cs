@@ -9,30 +9,31 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.Wallets;
-
-/// <summary>
-/// Represents an output of a transfer.
-/// </summary>
-public class TransferOutput
+namespace Neo.Wallets
 {
     /// <summary>
-    /// The id of the asset to transfer.
+    /// Represents an output of a transfer.
     /// </summary>
-    public required UInt160 AssetId;
+    public class TransferOutput
+    {
+        /// <summary>
+        /// The id of the asset to transfer.
+        /// </summary>
+        public required UInt160 AssetId;
 
-    /// <summary>
-    /// The amount of the asset to transfer.
-    /// </summary>
-    public BigDecimal Value;
+        /// <summary>
+        /// The amount of the asset to transfer.
+        /// </summary>
+        public BigDecimal Value;
 
-    /// <summary>
-    /// The account to transfer to.
-    /// </summary>
-    public required UInt160 ScriptHash;
+        /// <summary>
+        /// The account to transfer to.
+        /// </summary>
+        public required UInt160 ScriptHash;
 
-    /// <summary>
-    /// The object to be passed to the transfer method of NEP-17.
-    /// </summary>
-    public object? Data;
+        /// <summary>
+        /// The object to be passed to the transfer method of NEP-17.
+        /// </summary>
+        public object? Data;
+    }
 }

@@ -10,77 +10,71 @@
 // modifications are permitted.
 
 using Neo.SmartContract;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
-namespace Neo.Persistence;
-
-/// <summary>
-/// This interface provides methods to read from the database.
-/// </summary>
-public interface IReadOnlyStore : IReadOnlyStore<StorageKey, StorageItem> { }
-
-/// <summary>
-/// This interface provides methods to read from the database.
-/// </summary>
-public interface IReadOnlyStore<TKey, TValue> where TKey : class?
+namespace Neo.Persistence
 {
     /// <summary>
-    /// Gets the entry with the specified key.
+    /// This interface provides methods to read from the database.
     /// </summary>
-    /// <param name="key">The key to get.</param>
-    /// <returns>The entry if found, throws a <see cref="KeyNotFoundException"/> otherwise.</returns>
-    public TValue this[TKey key]
+    public interface IReadOnlyStore : IReadOnlyStore<StorageKey, StorageItem> { }
+
+    /// <summary>
+    /// This interface provides methods to read from the database.
+    /// </summary>
+    public interface IReadOnlyStore<TKey, TValue> where TKey : class?
     {
-        get
+        /// <summary>
+        /// Gets the entry with the specified key.
+        /// </summary>
+        /// <param name="key">The key to get.</param>
+        /// <returns>The entry if found, throws a <see cref="KeyNotFoundException"/> otherwise.</returns>
+        public TValue this[TKey key]
         {
-            return TryGet(key) ?? throw new KeyNotFoundException();
+            get
+            {
+                if (TryGet(key, out var item))
+                    return item;
+                throw new KeyNotFoundException();
+            }
         }
+
+        /// <summary>
+        /// Reads a specified entry from the database.
+        /// </summary>
+        /// <param name="key">The key of the entry.</param>
+        /// <returns>The data of the entry. Or <see langword="null"/> if it doesn't exist.</returns>
+        [Obsolete("use TryGet(byte[] key, [NotNullWhen(true)] out byte[]? value) instead.")]
+        TValue? TryGet(TKey key);
+
+        /// <summary>
+        /// Reads a specified entry from the database.
+        /// </summary>
+        /// <param name="key">The key of the entry.</param>
+        /// <param name="value">The data of the entry.</param>
+        /// <returns><see langword="true"/> if the entry exists; otherwise, <see langword="false"/>.</returns>
+        bool TryGet(TKey key, [NotNullWhen(true)] out TValue? value);
+
+        /// <summary>
+        /// Determines whether the database contains the specified entry.
+        /// </summary>
+        /// <param name="key">The key of the entry.</param>
+        /// <returns><see langword="true"/> if the database contains an entry with the specified key; otherwise, <see langword="false"/>.</returns>
+        bool Contains(TKey key);
+
+        /// <summary>
+        /// Finds the entries starting with the specified prefix.
+        /// </summary>
+        /// <param name="keyPrefix">The prefix of the key.</param>
+        /// <param name="direction">The search direction.</param>
+        /// <param name="skip">
+        /// Number of entries to skip in seek order, before the prefix filter is applied by the caller.
+        /// Implementations must reject negative values instead of treating them as zero.
+        /// </param>
+        /// <returns>The entries found with the desired prefix.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="skip"/> is negative.</exception>
+        public IEnumerable<(TKey Key, TValue Value)> Find(TKey? keyPrefix = null, SeekDirection direction = SeekDirection.Forward, int skip = 0);
     }
-
-    /// <summary>
-    /// Reads a specified entry from the database.
-    /// </summary>
-    /// <param name="key">The key of the entry.</param>
-    /// <returns>The data of the entry; <see langword="null"/> if the value is not found in the database.</returns>
-    TValue? TryGet(TKey key);
-
-    /// <summary>
-    /// Reads a specified entry from the database.
-    /// </summary>
-    /// <param name="key">The key of the entry.</param>
-    /// <param name="value">The data of the entry.</param>
-    /// <returns><see langword="true"/> if the entry exists; otherwise, <see langword="false"/>.</returns>
-    public bool TryGet(TKey key, [NotNullWhen(true)] out TValue? value)
-    {
-        value = TryGet(key);
-        return value is not null;
-    }
-
-    /// <summary>
-    /// Determines whether the database contains the specified entry.
-    /// </summary>
-    /// <param name="key">The key of the entry.</param>
-    /// <returns><see langword="true"/> if the database contains an entry with the specified key; otherwise, <see langword="false"/>.</returns>
-    bool Contains(TKey key);
-
-    /// <summary>
-    /// Finds the entries starting with the specified prefix.
-    /// </summary>
-    /// <param name="keyPrefix">The prefix of the key.</param>
-    /// <param name="direction">The search direction.</param>
-    /// <returns>The entries found with the desired prefix.</returns>
-    public IEnumerable<(TKey Key, TValue Value)> Find(TKey? keyPrefix = null, SeekDirection direction = SeekDirection.Forward);
-
-    /// <summary>
-    /// Returns an enumerable collection of key/value pairs within the specified key range, ordered according to the
-    /// specified seek direction.
-    /// </summary>
-    /// <param name="start">The inclusive lower bound of the key range to search. Cannot be null.</param>
-    /// <param name="end">The exclusive upper bound of the key range to search. Cannot be null.</param>
-    /// <param name="direction">The direction in which to enumerate the results. Use SeekDirection.Forward to enumerate in ascending key order,
-    /// or SeekDirection.Backward for descending order. The default is SeekDirection.Forward.</param>
-    /// <returns>An enumerable collection of key/value pairs whose keys are greater than or equal to <paramref name="start"/> and
-    /// less than <paramref name="end"/>, ordered according to <paramref name="direction"/>. The collection is empty if
-    /// no keys are found in the specified range.</returns>
-    public IEnumerable<(TKey Key, TValue Value)> FindRange(TKey start, TKey end, SeekDirection direction = SeekDirection.Forward);
 }

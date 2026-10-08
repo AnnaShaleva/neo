@@ -9,69 +9,68 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-using Neo.Extensions.IO;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Neo.Extensions;
 using Neo.IO;
 using Neo.Network.P2P.Capabilities;
+using System;
 
-namespace Neo.UnitTests.Network.P2P.Capabilities;
-
-[TestClass]
-public class UT_ServerCapability
+namespace Neo.UnitTests.Network.P2P.Capabilities
 {
-    [TestMethod]
-    public void Size_Get()
+    [TestClass]
+    public class UT_ServerCapability
     {
-        var test = new ServerCapability(NodeCapabilityType.TcpServer) { Port = 1 };
-        Assert.AreEqual(3, test.Size);
-
-#pragma warning disable CS0618 // Type or member is obsolete
-        test = new ServerCapability(NodeCapabilityType.WsServer) { Port = 2 };
-#pragma warning restore CS0618 // Type or member is obsolete
-        Assert.AreEqual(3, test.Size);
-    }
-
-    [TestMethod]
-    public void DeserializeAndSerialize()
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-        var test = new ServerCapability(NodeCapabilityType.WsServer) { Port = 2 };
-#pragma warning restore CS0618 // Type or member is obsolete
-        var buffer = test.ToArray();
-
-        var br = new MemoryReader(buffer);
-        var clone = (ServerCapability)NodeCapability.DeserializeFrom(ref br);
-
-        Assert.AreEqual(test.Port, clone.Port);
-        Assert.AreEqual(test.Type, clone.Type);
-
-#pragma warning disable CS0618 // Type or member is obsolete
-        clone = new ServerCapability(NodeCapabilityType.WsServer, 123);
-#pragma warning restore CS0618 // Type or member is obsolete
-        br = new MemoryReader(buffer);
-        ((ISerializable)clone).Deserialize(ref br);
-
-        Assert.AreEqual(test.Port, clone.Port);
-        Assert.AreEqual(test.Type, clone.Type);
-
-        clone = new ServerCapability(NodeCapabilityType.TcpServer, 123);
-
-        Assert.ThrowsExactly<FormatException>(() => MemoryReaderDeserialize(buffer, clone));
-        Assert.ThrowsExactly<ArgumentException>(() => new ServerCapability(NodeCapabilityType.FullNode));
-
-        // Wrong type
-        buffer[0] = 0xFF;
-        Assert.ThrowsExactly<FormatException>(() => MemoryReaderDeserializeFrom(buffer));
-
-        static void MemoryReaderDeserialize(byte[] buffer, ISerializable obj)
+        [TestMethod]
+        public void Size_Get()
         {
-            var reader = new MemoryReader(buffer);
-            obj.Deserialize(ref reader);
+            var test = new ServerCapability(NodeCapabilityType.TcpServer) { Port = 1 };
+            Assert.AreEqual(3, test.Size);
+
+#pragma warning disable CS0612 // Type or member is obsolete
+            test = new ServerCapability(NodeCapabilityType.WsServer) { Port = 2 };
+#pragma warning restore CS0612 // Type or member is obsolete
+            Assert.AreEqual(3, test.Size);
         }
 
-        static void MemoryReaderDeserializeFrom(byte[] buffer)
+        [TestMethod]
+        public void DeserializeAndSerialize()
         {
-            var reader = new MemoryReader(buffer);
-            NodeCapability.DeserializeFrom(ref reader);
+#pragma warning disable CS0612 // Type or member is obsolete
+            var test = new ServerCapability(NodeCapabilityType.WsServer) { Port = 2 };
+            var buffer = test.ToArray();
+
+            var br = new MemoryReader(buffer);
+            var clone = (ServerCapability)NodeCapability.DeserializeFrom(ref br);
+
+            Assert.AreEqual(test.Port, clone.Port);
+            Assert.AreEqual(test.Type, clone.Type);
+
+            clone = new ServerCapability(NodeCapabilityType.WsServer, 123);
+#pragma warning restore CS0612 // Type or member is obsolete
+            br = new MemoryReader(buffer);
+            ((ISerializable)clone).Deserialize(ref br);
+
+            Assert.AreEqual(test.Port, clone.Port);
+            Assert.AreEqual(test.Type, clone.Type);
+
+            clone = new ServerCapability(NodeCapabilityType.TcpServer, 123);
+
+            void DeserializeWrongType()
+            {
+                var br2 = new MemoryReader(buffer);
+                ((ISerializable)clone).Deserialize(ref br2);
+            }
+            Assert.ThrowsExactly<FormatException>(DeserializeWrongType);
+            Assert.ThrowsExactly<ArgumentException>(() => _ = new ServerCapability(NodeCapabilityType.FullNode));
+
+            // Wrong type
+            buffer[0] = 0xFF;
+            void DeserializeFromWrongType()
+            {
+                var br2 = new MemoryReader(buffer);
+                NodeCapability.DeserializeFrom(ref br2);
+            }
+            Assert.ThrowsExactly<FormatException>(DeserializeFromWrongType);
         }
     }
 }

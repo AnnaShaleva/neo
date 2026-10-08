@@ -9,156 +9,157 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.Extensions;
-using Neo.Extensions.IO;
 using Neo.IO;
 using Neo.Network.P2P.Payloads;
 using Neo.SmartContract;
 using Neo.SmartContract.Native;
 using Neo.UnitTests.Ledger;
 using Neo.VM;
+using System;
 
-namespace Neo.UnitTests.Network.P2P.Payloads;
-
-[TestClass]
-public class UT_Conflicts
+namespace Neo.UnitTests.Network.P2P.Payloads
 {
-    private const byte Prefix_Transaction = 11;
-    private static readonly UInt256 _u = new(new byte[32] {
-            0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-            0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-            0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-            0x01, 0x01
-        });
-
-    private static Conflicts CreateConflictsPayload()
+    [TestClass]
+    public class UT_Conflicts
     {
-        return new Conflicts() { Hash = _u };
-    }
+        private const byte Prefix_Transaction = 11;
+        private static readonly UInt256 _u = new UInt256(new byte[32] {
+                0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+                0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+                0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+                0x01, 0x01
+            });
 
-    [TestMethod]
-    public void Size_Get()
-    {
-        var test = CreateConflictsPayload();
-        Assert.AreEqual(1 + 32, test.Size);
-    }
-
-    [TestMethod]
-    public void ToJson()
-    {
-        var test = CreateConflictsPayload();
-        var json = test.ToJson().ToString();
-        Assert.AreEqual(@"{""type"":""Conflicts"",""hash"":""0x0101010101010101010101010101010101010101010101010101010101010101""}", json);
-    }
-
-    [TestMethod]
-    public void DeserializeAndSerialize()
-    {
-        var test = CreateConflictsPayload();
-
-        var clone = test.ToArray().AsSerializable<Conflicts>();
-        Assert.AreEqual(clone.Type, test.Type);
-
-        // As transactionAttribute
-        byte[] buffer = test.ToArray();
-        var reader = new MemoryReader(buffer);
-        clone = (Conflicts)TransactionAttribute.DeserializeFrom(ref reader);
-        Assert.AreEqual(clone.Type, test.Type);
-
-        // Wrong type
-        buffer[0] = 0xff;
-        Assert.ThrowsExactly<FormatException>(() => MemoryReaderDeserializeFrom(buffer));
-
-        static void MemoryReaderDeserializeFrom(byte[] buffer)
+        private Conflicts CreateConflictsPayload()
         {
-            var reader = new MemoryReader(buffer);
-            TransactionAttribute.DeserializeFrom(ref reader);
+            return new Conflicts() { Hash = _u };
         }
-    }
 
-    [TestMethod]
-    public void Verify()
-    {
-        var test = CreateConflictsPayload();
-        var snapshotCache = TestBlockchain.GetTestSnapshotCache();
-        var key = UT_MemoryPool.CreateStorageKey(NativeContract.Ledger.Id, Prefix_Transaction, _u.ToArray());
-
-        // Conflicting transaction is in the Conflicts attribute of some other on-chain transaction.
-        var tx = new Transaction()
+        [TestMethod]
+        public void Size_Get()
         {
-            Script = new byte[] { (byte)OpCode.RET },
-            Witnesses = [Witness.Empty],
-            Signers = [new Signer() { Account = UInt160.Zero }],
-            Attributes = []
-        };
-        var conflict = new TransactionState();
-        snapshotCache.Add(key, new StorageItem(conflict));
-        Assert.IsTrue(test.Verify(snapshotCache, tx));
+            var test = CreateConflictsPayload();
+            Assert.AreEqual(1 + 32, test.Size);
+        }
 
-        // Conflicting transaction is on-chain.
-        snapshotCache.Delete(key);
-        conflict = new TransactionState
+        [TestMethod]
+        public void ToJson()
         {
-            BlockIndex = 123,
-            Transaction = tx,
-            State = VMState.NONE
-        };
-        snapshotCache.Add(key, new StorageItem(conflict));
-        Assert.IsFalse(test.Verify(snapshotCache, tx));
+            var test = CreateConflictsPayload();
+            var json = test.ToJson().ToString();
+            Assert.AreEqual(@"{""type"":""Conflicts"",""hash"":""0x0101010101010101010101010101010101010101010101010101010101010101""}", json);
+        }
 
-        // There's no conflicting transaction at all.
-        snapshotCache.Delete(key);
-        Assert.IsTrue(test.Verify(snapshotCache, tx));
-    }
-
-    [TestMethod]
-    public void Verify_DuplicateConflictHash()
-    {
-        var snapshotCache = TestBlockchain.GetTestSnapshotCache();
-
-        // Create two Conflicts attributes with the same hash
-        var conflict1 = new Conflicts() { Hash = _u };
-        var conflict2 = new Conflicts() { Hash = _u };
-
-        var tx = new Transaction()
+        [TestMethod]
+        public void DeserializeAndSerialize()
         {
-            Script = new byte[] { (byte)OpCode.RET },
-            Witnesses = [Witness.Empty],
-            Signers = [new Signer() { Account = UInt160.Zero }],
-            Attributes = [conflict1, conflict2]
-        };
+            var test = CreateConflictsPayload();
 
-        // Verify should return false because there are duplicate conflict hashes
-        Assert.IsFalse(conflict1.Verify(snapshotCache, tx));
-        Assert.IsFalse(conflict2.Verify(snapshotCache, tx));
-    }
+            var clone = test.ToArray().AsSerializable<Conflicts>();
+            Assert.AreEqual(clone.Type, test.Type);
 
-    [TestMethod]
-    public void Verify_MultipleConflictsDifferentHashes()
-    {
-        var snapshotCache = TestBlockchain.GetTestSnapshotCache();
+            // As transactionAttribute
+            byte[] buffer = test.ToArray();
+            var reader = new MemoryReader(buffer);
+            clone = TransactionAttribute.DeserializeFrom(ref reader) as Conflicts;
+            Assert.AreEqual(clone.Type, test.Type);
 
-        var hash2 = new UInt256(new byte[32] {
+            // Wrong type
+            buffer[0] = 0xff;
+            void DeserializeWrongType()
+            {
+                var reader = new MemoryReader(buffer);
+                TransactionAttribute.DeserializeFrom(ref reader);
+            }
+            Assert.ThrowsExactly<FormatException>(DeserializeWrongType);
+        }
+
+        [TestMethod]
+        public void Verify()
+        {
+            var test = CreateConflictsPayload();
+            var snapshotCache = TestBlockchain.GetTestSnapshotCache();
+            var key = UT_MemoryPool.CreateStorageKey(NativeContract.Ledger.Id, Prefix_Transaction, _u.ToArray());
+
+            // Conflicting transaction is in the Conflicts attribute of some other on-chain transaction.
+            var tx = new Transaction()
+            {
+                Script = new byte[] { (byte)OpCode.RET },
+                Witnesses = [Witness.Empty],
+                Signers = [new Signer() { Account = UInt160.Zero }],
+                Attributes = []
+            };
+            var conflict = new TransactionState();
+            snapshotCache.Add(key, new StorageItem(conflict));
+            Assert.IsTrue(test.Verify(snapshotCache, tx));
+
+            // Conflicting transaction is on-chain.
+            snapshotCache.Delete(key);
+            conflict = new TransactionState
+            {
+                BlockIndex = 123,
+                Transaction = tx,
+                State = VMState.NONE
+            };
+            snapshotCache.Add(key, new StorageItem(conflict));
+            Assert.IsFalse(test.Verify(snapshotCache, tx));
+
+            // There's no conflicting transaction at all.
+            snapshotCache.Delete(key);
+            Assert.IsTrue(test.Verify(snapshotCache, tx));
+        }
+
+        [TestMethod]
+        public void Verify_DuplicateConflictHash()
+        {
+            var snapshotCache = TestBlockchain.GetTestSnapshotCache();
+
+            // Create two Conflicts attributes with the same hash
+            var conflict1 = new Conflicts() { Hash = _u };
+            var conflict2 = new Conflicts() { Hash = _u };
+
+            var tx = new Transaction()
+            {
+                Script = new byte[] { (byte)OpCode.RET },
+                Witnesses = [Witness.Empty],
+                Signers = [new Signer() { Account = UInt160.Zero }],
+                Attributes = [conflict1, conflict2]
+            };
+
+            // Verify should return false because there are duplicate conflict hashes
+            Assert.IsFalse(conflict1.Verify(snapshotCache, tx));
+            Assert.IsFalse(conflict2.Verify(snapshotCache, tx));
+        }
+
+        [TestMethod]
+        public void Verify_MultipleConflictsDifferentHashes()
+        {
+            var snapshotCache = TestBlockchain.GetTestSnapshotCache();
+
+            var hash2 = new UInt256(new byte[32] {
                 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02,
                 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02,
                 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02,
                 0x02, 0x02
             });
 
-        // Create two Conflicts attributes with different hashes
-        var conflict1 = new Conflicts() { Hash = _u };
-        var conflict2 = new Conflicts() { Hash = hash2 };
+            // Create two Conflicts attributes with different hashes
+            var conflict1 = new Conflicts() { Hash = _u };
+            var conflict2 = new Conflicts() { Hash = hash2 };
 
-        var tx = new Transaction()
-        {
-            Script = new byte[] { (byte)OpCode.RET },
-            Witnesses = [Witness.Empty],
-            Signers = [new Signer() { Account = UInt160.Zero }],
-            Attributes = [conflict1, conflict2]
-        };
+            var tx = new Transaction()
+            {
+                Script = new byte[] { (byte)OpCode.RET },
+                Witnesses = [Witness.Empty],
+                Signers = [new Signer() { Account = UInt160.Zero }],
+                Attributes = [conflict1, conflict2]
+            };
 
-        // Verify should return true because the hashes are different and neither is on-chain
-        Assert.IsTrue(conflict1.Verify(snapshotCache, tx));
-        Assert.IsTrue(conflict2.Verify(snapshotCache, tx));
+            // Verify should return true because the hashes are different and neither is on-chain
+            Assert.IsTrue(conflict1.Verify(snapshotCache, tx));
+            Assert.IsTrue(conflict2.Verify(snapshotCache, tx));
+        }
     }
 }

@@ -9,23 +9,26 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.Persistence;
+using System;
 
-/// <summary>
-/// This interface provides methods for reading, writing, and committing from/to snapshot.
-/// </summary>
-public interface IStoreSnapshot :
-    IReadOnlyStore<byte[], byte[]>,
-    IWriteStore<byte[], byte[]>,
-    IDisposable
+namespace Neo.Persistence
 {
     /// <summary>
-    /// Store
+    /// This interface provides methods for reading, writing, and committing from/to snapshot.
     /// </summary>
-    IStore Store { get; }
+    public interface IStoreSnapshot :
+        IReadOnlyStore<byte[], byte[]>,
+        IWriteStore<byte[], byte[]>,
+        IDisposable
+    {
+        /// <summary>
+        /// Store
+        /// </summary>
+        IStore Store { get; }
 
-    /// <summary>
-    /// Commits all changes in the snapshot to the database.
-    /// </summary>
-    void Commit();
+        /// <summary>
+        /// Commits all changes in the snapshot to the database.
+        /// </summary>
+        void Commit();
+    }
 }

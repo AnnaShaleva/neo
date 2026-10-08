@@ -12,11 +12,12 @@
 using Neo.Persistence;
 using Neo.Persistence.Providers;
 
-namespace Neo.UnitTests.Persistence;
-
-public class TestMemoryStoreProvider(MemoryStore memoryStore) : IStoreProvider
+namespace Neo.UnitTests.Persistence
 {
-    public MemoryStore MemoryStore { get; set; } = memoryStore;
-    public string Name => nameof(MemoryStore);
-    public IStore GetStore(string? path) => MemoryStore;
+    public class TestMemoryStoreProvider(MemoryStore memoryStore) : IStoreProvider
+    {
+        public MemoryStore MemoryStore { get; set; } = memoryStore;
+        public string Name => nameof(MemoryStore);
+        public IStore GetStore(string path) => MemoryStore;
+    }
 }

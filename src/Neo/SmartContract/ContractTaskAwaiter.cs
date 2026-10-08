@@ -9,63 +9,66 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using System;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
-namespace Neo.SmartContract;
-
-internal class ContractTaskAwaiter : INotifyCompletion
+namespace Neo.SmartContract
 {
-    private Action? _continuation;
-    private Exception? _exception;
-
-    public bool IsCompleted { get; private set; }
-
-    public void GetResult()
+    internal class ContractTaskAwaiter : INotifyCompletion
     {
-        if (_exception is not null)
-            throw _exception;
+        private Action? _continuation;
+        private Exception? _exception;
+
+        public bool IsCompleted { get; private set; }
+
+        public void GetResult()
+        {
+            if (_exception is not null)
+                throw _exception;
+        }
+
+        public void SetResult() => RunContinuation();
+
+        public virtual void SetResult(ApplicationEngine engine) => SetResult();
+
+        public void SetException(Exception exception)
+        {
+            _exception = exception;
+            RunContinuation();
+        }
+
+        public void OnCompleted(Action continuation)
+        {
+            Interlocked.CompareExchange(ref _continuation, continuation, null);
+        }
+
+        protected void RunContinuation()
+        {
+            IsCompleted = true;
+            _continuation?.Invoke();
+        }
     }
 
-    public void SetResult() => RunContinuation();
-
-    public virtual void SetResult(ApplicationEngine engine) => SetResult();
-
-    public void SetException(Exception exception)
+    internal class ContractTaskAwaiter<T> : ContractTaskAwaiter
     {
-        _exception = exception;
-        RunContinuation();
-    }
+        private T? _result;
 
-    public void OnCompleted(Action continuation)
-    {
-        Interlocked.CompareExchange(ref _continuation, continuation, null);
-    }
+        public new T? GetResult()
+        {
+            base.GetResult();
+            return _result;
+        }
 
-    protected void RunContinuation()
-    {
-        IsCompleted = true;
-        _continuation?.Invoke();
-    }
-}
+        public void SetResult(T result)
+        {
+            _result = result;
+            RunContinuation();
+        }
 
-internal class ContractTaskAwaiter<T> : ContractTaskAwaiter
-{
-    private T? _result;
-
-    public new T GetResult()
-    {
-        base.GetResult();
-        return _result!;
-    }
-
-    public void SetResult(T result)
-    {
-        _result = result;
-        RunContinuation();
-    }
-
-    public override void SetResult(ApplicationEngine engine)
-    {
-        SetResult((T)engine.Convert(engine.Pop(), new InteropParameterDescriptor(typeof(T)))!);
+        public override void SetResult(ApplicationEngine engine)
+        {
+            SetResult((T)engine.Convert(engine.Pop(), new InteropParameterDescriptor(typeof(T)))!);
+        }
     }
 }

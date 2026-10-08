@@ -9,9 +9,10 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.Plugins;
-
-public interface IPluginSettings
+namespace Neo.Plugins
 {
-    public UnhandledExceptionPolicy ExceptionPolicy { get; }
+    public interface IPluginSettings
+    {
+        public UnhandledExceptionPolicy ExceptionPolicy { get; }
+    }
 }

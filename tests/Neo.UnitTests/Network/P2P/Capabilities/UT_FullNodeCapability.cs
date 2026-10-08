@@ -9,34 +9,36 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-using Neo.Extensions.IO;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Neo.Extensions;
 using Neo.IO;
 using Neo.Network.P2P.Capabilities;
 
-namespace Neo.UnitTests.Network.P2P.Capabilities;
-
-[TestClass]
-public class UT_FullNodeCapability
+namespace Neo.UnitTests.Network.P2P.Capabilities
 {
-    [TestMethod]
-    public void Size_Get()
+    [TestClass]
+    public class UT_FullNodeCapability
     {
-        var test = new FullNodeCapability() { StartHeight = 1 };
-        Assert.AreEqual(5, test.Size);
+        [TestMethod]
+        public void Size_Get()
+        {
+            var test = new FullNodeCapability() { StartHeight = 1 };
+            Assert.AreEqual(5, test.Size);
 
-        test = new FullNodeCapability(2);
-        Assert.AreEqual(5, test.Size);
-    }
+            test = new FullNodeCapability(2);
+            Assert.AreEqual(5, test.Size);
+        }
 
-    [TestMethod]
-    public void DeserializeAndSerialize()
-    {
-        var test = new FullNodeCapability() { StartHeight = uint.MaxValue };
-        var buffer = test.ToArray();
+        [TestMethod]
+        public void DeserializeAndSerialize()
+        {
+            var test = new FullNodeCapability() { StartHeight = uint.MaxValue };
+            var buffer = test.ToArray();
 
-        var br = new MemoryReader(buffer);
-        var clone = (FullNodeCapability)NodeCapability.DeserializeFrom(ref br);
+            var br = new MemoryReader(buffer);
+            var clone = (FullNodeCapability)NodeCapability.DeserializeFrom(ref br);
 
-        Assert.AreEqual(test.StartHeight, clone.StartHeight);
+            Assert.AreEqual(test.StartHeight, clone.StartHeight);
+        }
     }
 }

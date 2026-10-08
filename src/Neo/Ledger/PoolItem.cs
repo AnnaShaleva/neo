@@ -10,56 +10,59 @@
 // modifications are permitted.
 
 using Neo.Network.P2P.Payloads;
+using System;
 
-namespace Neo.Ledger;
-
-/// <summary>
-/// Represents an item in the Memory Pool.
-///
-///  Note: PoolItem objects don't consider transaction priority (low or high) in their compare CompareTo method.
-///       This is because items of differing priority are never added to the same sorted set in MemoryPool.
-/// </summary>
-internal class PoolItem : IComparable<PoolItem>
+namespace Neo.Ledger
 {
     /// <summary>
-    /// Internal transaction for PoolItem
+    /// Represents an item in the Memory Pool.
+    ///
+    ///  Note: PoolItem objects don't consider transaction priority (low or high) in their compare CompareTo method.
+    ///       This is because items of differing priority are never added to the same sorted set in MemoryPool.
     /// </summary>
-    public Transaction Tx { get; }
-
-    /// <summary>
-    /// Timestamp when transaction was stored on PoolItem
-    /// </summary>
-    public DateTime Timestamp { get; }
-
-    /// <summary>
-    /// Timestamp when this transaction was last broadcast to other nodes
-    /// </summary>
-    public DateTime LastBroadcastTimestamp { get; set; }
-
-    internal PoolItem(Transaction tx)
+    internal class PoolItem : IComparable<PoolItem>
     {
-        Tx = tx;
-        Timestamp = TimeProvider.Current.UtcNow;
-        LastBroadcastTimestamp = Timestamp;
-    }
+        /// <summary>
+        /// Internal transaction for PoolItem
+        /// </summary>
+        public Transaction Tx { get; }
 
-    public int CompareTo(Transaction otherTx)
-    {
-        var ret = (Tx.GetAttribute<HighPriorityAttribute>() != null)
-            .CompareTo(otherTx.GetAttribute<HighPriorityAttribute>() != null);
-        if (ret != 0) return ret;
-        // Fees sorted ascending
-        ret = Tx.FeePerByte.CompareTo(otherTx.FeePerByte);
-        if (ret != 0) return ret;
-        ret = Tx.NetworkFee.CompareTo(otherTx.NetworkFee);
-        if (ret != 0) return ret;
-        // Transaction hash sorted descending
-        return otherTx.Hash.CompareTo(Tx.Hash);
-    }
+        /// <summary>
+        /// Timestamp when transaction was stored on PoolItem
+        /// </summary>
+        public DateTime Timestamp { get; }
 
-    public int CompareTo(PoolItem? otherItem)
-    {
-        if (otherItem == null) return 1;
-        return CompareTo(otherItem.Tx);
+        /// <summary>
+        /// Timestamp when this transaction was last broadcast to other nodes
+        /// </summary>
+        public DateTime LastBroadcastTimestamp { get; set; }
+
+        internal PoolItem(Transaction tx)
+        {
+            Tx = tx;
+            Timestamp = TimeProvider.Current.UtcNow;
+            LastBroadcastTimestamp = Timestamp;
+        }
+
+        public int CompareTo(Transaction otherTx)
+        {
+            if (otherTx == null) return 1;
+            var ret = (Tx.GetAttribute<HighPriorityAttribute>() != null)
+                .CompareTo(otherTx.GetAttribute<HighPriorityAttribute>() != null);
+            if (ret != 0) return ret;
+            // Fees sorted ascending
+            ret = Tx.FeePerByte.CompareTo(otherTx.FeePerByte);
+            if (ret != 0) return ret;
+            ret = Tx.NetworkFee.CompareTo(otherTx.NetworkFee);
+            if (ret != 0) return ret;
+            // Transaction hash sorted descending
+            return otherTx.Hash.CompareTo(Tx.Hash);
+        }
+
+        public int CompareTo(PoolItem? otherItem)
+        {
+            if (otherItem == null) return 1;
+            return CompareTo(otherItem.Tx);
+        }
     }
 }

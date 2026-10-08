@@ -9,46 +9,41 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.SmartContract;
 using Neo.SmartContract.Iterators;
 using Neo.VM.Types;
+using System.Collections.Generic;
 
-namespace Neo.UnitTests.SmartContract.Iterators;
-
-[TestClass]
-public class UT_StorageIterator
+namespace Neo.UnitTests.SmartContract.Iterators
 {
-    [TestMethod]
-    public void TestGeneratorAndDispose()
+    [TestClass]
+    public class UT_StorageIterator
     {
-        StorageIterator storageIterator = new(new List<(StorageKey, StorageItem)>().GetEnumerator(), 0, FindOptions.None);
-        Assert.IsNotNull(storageIterator);
-        try
+        [TestMethod]
+        public void TestGeneratorAndDispose()
         {
+            StorageIterator storageIterator = new(new List<(StorageKey, StorageItem)>().GetEnumerator(), 0, FindOptions.None);
+            Assert.IsNotNull(storageIterator);
             storageIterator.Dispose();
         }
-        catch
+
+        [TestMethod]
+        public void TestKeyAndValueAndNext()
         {
-            Assert.Fail();
+            List<(StorageKey, StorageItem)> list = new();
+            StorageKey storageKey = new()
+            {
+                Key = new byte[1]
+            };
+            StorageItem storageItem = new()
+            {
+                Value = new byte[1]
+            };
+            list.Add((storageKey, storageItem));
+            StorageIterator storageIterator = new(list.GetEnumerator(), 0, FindOptions.ValuesOnly);
+            storageIterator.Next();
+            Assert.AreEqual(new ByteString(new byte[1]), storageIterator.Value());
         }
-
-    }
-
-    [TestMethod]
-    public void TestKeyAndValueAndNext()
-    {
-        List<(StorageKey, StorageItem)> list = new();
-        StorageKey storageKey = new()
-        {
-            Key = new byte[1]
-        };
-        StorageItem storageItem = new()
-        {
-            Value = new byte[1]
-        };
-        list.Add((storageKey, storageItem));
-        StorageIterator storageIterator = new(list.GetEnumerator(), 0, FindOptions.ValuesOnly);
-        storageIterator.Next();
-        Assert.AreEqual(new ByteString(new byte[1]), storageIterator.Value(null));
     }
 }

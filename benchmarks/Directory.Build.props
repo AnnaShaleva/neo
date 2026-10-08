@@ -2,11 +2,14 @@
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFrameworks>net10.0</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
+    <!-- Console apps / BenchmarkDotNet — not unit-test projects. Prevents VS Test
+         from treating them as tests and building with an empty TargetFramework. -->
+    <IsTestProject>false</IsTestProject>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningLevel>4</WarningLevel>
+    <AnalysisLevel>latest</AnalysisLevel>
   </PropertyGroup>
 
   <ItemGroup>

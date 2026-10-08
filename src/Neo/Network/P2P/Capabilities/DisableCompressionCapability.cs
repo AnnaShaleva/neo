@@ -10,32 +10,35 @@
 // modifications are permitted.
 
 using Neo.IO;
+using System;
+using System.IO;
 
-namespace Neo.Network.P2P.Capabilities;
-
-/// <summary>
-/// This capability disable the compression p2p mechanism.
-/// </summary>
-public class DisableCompressionCapability : NodeCapability
+namespace Neo.Network.P2P.Capabilities
 {
-    public override int Size =>
-        base.Size +    // Type
-        1;  // Zero (empty VarBytes or String)
-
     /// <summary>
-    /// Initializes a new instance of the <see cref="DisableCompressionCapability"/> class.
+    /// This capability disable the compression p2p mechanism.
     /// </summary>
-    public DisableCompressionCapability() : base(NodeCapabilityType.DisableCompression) { }
-
-    protected override void DeserializeWithoutType(ref MemoryReader reader)
+    public class DisableCompressionCapability : NodeCapability
     {
-        var zero = reader.ReadByte(); // Zero-length byte array or string (see UnknownCapability).
-        if (zero != 0)
-            throw new FormatException("DisableCompression has some data");
-    }
+        public override int Size =>
+            base.Size +    // Type
+            1;  // Zero (empty VarBytes or String)
 
-    protected override void SerializeWithoutType(BinaryWriter writer)
-    {
-        writer.Write((byte)0);
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DisableCompressionCapability"/> class.
+        /// </summary>
+        public DisableCompressionCapability() : base(NodeCapabilityType.DisableCompression) { }
+
+        protected override void DeserializeWithoutType(ref MemoryReader reader)
+        {
+            var zero = reader.ReadByte(); // Zero-length byte array or string (see UnknownCapability).
+            if (zero != 0)
+                throw new FormatException("DisableCompression has some data");
+        }
+
+        protected override void SerializeWithoutType(BinaryWriter writer)
+        {
+            writer.Write((byte)0);
+        }
     }
 }

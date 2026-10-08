@@ -9,48 +9,50 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.SmartContract;
 using Neo.Wallets;
 
-namespace Neo.UnitTests.Wallets;
-
-public class MyWalletAccount : WalletAccount
+namespace Neo.UnitTests.Wallets
 {
-    private KeyPair? key = null;
-    public override bool HasKey => key != null;
-
-    public MyWalletAccount(UInt160 scriptHash)
-        : base(scriptHash, TestProtocolSettings.Default)
+    public class MyWalletAccount : WalletAccount
     {
+        private KeyPair key = null;
+        public override bool HasKey => key != null;
+
+        public MyWalletAccount(UInt160 scriptHash)
+            : base(scriptHash, TestProtocolSettings.Default)
+        {
+        }
+
+        public override KeyPair GetKey()
+        {
+            return key;
+        }
+
+        public void SetKey(KeyPair inputKey)
+        {
+            key = inputKey;
+        }
     }
 
-    public override KeyPair? GetKey()
+    [TestClass]
+    public class UT_WalletAccount
     {
-        return key;
-    }
+        [TestMethod]
+        public void TestGetAddress()
+        {
+            MyWalletAccount walletAccount = new MyWalletAccount(UInt160.Zero);
+            Assert.AreEqual("NKuyBkoGdZZSLyPbJEetheRhMjeznFZszf", walletAccount.Address);
+        }
 
-    public void SetKey(KeyPair inputKey)
-    {
-        key = inputKey;
-    }
-}
-
-[TestClass]
-public class UT_WalletAccount
-{
-    [TestMethod]
-    public void TestGetAddress()
-    {
-        var walletAccount = new MyWalletAccount(UInt160.Zero);
-        Assert.AreEqual("NKuyBkoGdZZSLyPbJEetheRhMjeznFZszf", walletAccount.Address);
-    }
-
-    [TestMethod]
-    public void TestGetWatchOnly()
-    {
-        var walletAccount = new MyWalletAccount(UInt160.Zero);
-        Assert.IsTrue(walletAccount.WatchOnly);
-        walletAccount.Contract = new Contract();
-        Assert.IsFalse(walletAccount.WatchOnly);
+        [TestMethod]
+        public void TestGetWatchOnly()
+        {
+            MyWalletAccount walletAccount = new MyWalletAccount(UInt160.Zero);
+            Assert.IsTrue(walletAccount.WatchOnly);
+            walletAccount.Contract = new Contract();
+            Assert.IsFalse(walletAccount.WatchOnly);
+        }
     }
 }

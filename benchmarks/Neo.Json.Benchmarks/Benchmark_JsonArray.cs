@@ -11,183 +11,184 @@
 
 using BenchmarkDotNet.Attributes;
 
-namespace Neo.Json.Benchmarks;
-
-[MemoryDiagnoser]  // 用于统计内存使用
-[CsvMeasurementsExporter]  // CSV 格式导出
-[MarkdownExporter]         // Markdown 格式导出
-public class Benchmark_JsonArray
+namespace Neo.Json.Benchmarks
 {
-    private JObject _alice = new();
-    private JObject _bob = new();
-    private JArray _jArray = new();
-
-    [GlobalSetup]
-    public void Setup()
+    [MemoryDiagnoser]  // 用于统计内存使用
+    [CsvMeasurementsExporter]  // CSV 格式导出
+    [MarkdownExporter]         // Markdown 格式导出
+    public class Benchmark_JsonArray
     {
-        _alice = new JObject
+        private JObject _alice = new();
+        private JObject _bob = new();
+        private JArray _jArray = new();
+
+        [GlobalSetup]
+        public void Setup()
         {
-            ["name"] = "alice",
-            ["age"] = 30,
-            ["score"] = 100.001,
-            ["gender"] = "female",
-            ["isMarried"] = true,
-            ["pet"] = new JObject
+            _alice = new JObject
             {
-                ["name"] = "Tom",
-                ["type"] = "cat"
-            }
-        };
+                ["name"] = "alice",
+                ["age"] = 30,
+                ["score"] = 100.001,
+                ["gender"] = "female",
+                ["isMarried"] = true,
+                ["pet"] = new JObject
+                {
+                    ["name"] = "Tom",
+                    ["type"] = "cat"
+                }
+            };
 
-        _bob = new JObject
-        {
-            ["name"] = "bob",
-            ["age"] = 100000,
-            ["score"] = 0.001,
-            ["gender"] = "male",
-            ["isMarried"] = false,
-            ["pet"] = new JObject
+            _bob = new JObject
             {
-                ["name"] = "Paul",
-                ["type"] = "dog"
-            }
-        };
+                ["name"] = "bob",
+                ["age"] = 100000,
+                ["score"] = 0.001,
+                ["gender"] = "male",
+                ["isMarried"] = false,
+                ["pet"] = new JObject
+                {
+                    ["name"] = "Paul",
+                    ["type"] = "dog"
+                }
+            };
 
-        _jArray = new JArray();
-    }
-
-    [Benchmark]
-    public void TestAdd()
-    {
-        _jArray.Clear();
-        _jArray.Add(_alice);
-        _jArray.Add(_bob);
-    }
-
-    [Benchmark]
-    public void TestSetItem()
-    {
-        _jArray.Clear();
-        _jArray.Add(_alice);
-        _jArray[0] = _bob;
-    }
-
-    [Benchmark]
-    public void TestClear()
-    {
-        _jArray.Clear();
-    }
-
-    [Benchmark]
-    public void TestContains()
-    {
-        _jArray.Clear();
-        _jArray.Add(_alice);
-        _ = _jArray.Contains(_alice);
-    }
-
-    [Benchmark]
-    public void TestCopyTo()
-    {
-        _jArray.Clear();
-        _jArray.Add(_alice);
-        _jArray.Add(_bob);
-
-        var objects = new JObject[2];
-        _jArray.CopyTo(objects, 0);
-    }
-
-    [Benchmark]
-    public void TestInsert()
-    {
-        _jArray.Clear();
-        _jArray.Add(_alice);
-        _jArray.Insert(0, _bob);
-    }
-
-    [Benchmark]
-    public void TestIndexOf()
-    {
-        _jArray.Clear();
-        _jArray.Add(_alice);
-        _ = _jArray.IndexOf(_alice);
-    }
-
-    [Benchmark]
-    public void TestRemove()
-    {
-        _jArray.Clear();
-        _jArray.Add(_alice);
-        _jArray.Remove(_alice);
-    }
-
-    [Benchmark]
-    public void TestRemoveAt()
-    {
-        _jArray.Clear();
-        _jArray.Add(_alice);
-        _jArray.Add(_bob);
-        _jArray.RemoveAt(1);
-    }
-
-    [Benchmark]
-    public void TestGetEnumerator()
-    {
-        _jArray.Clear();
-        _jArray.Add(_alice);
-        _jArray.Add(_bob);
-        foreach (var _ in _jArray)
-        {
-            // Do nothing, just enumerate
+            _jArray = new JArray();
         }
-    }
 
-    [Benchmark]
-    public void TestCount()
-    {
-        _jArray.Clear();
-        _jArray.Add(_alice);
-        _jArray.Add(_bob);
-        _ = _jArray.Count;
-    }
+        [Benchmark]
+        public void TestAdd()
+        {
+            _jArray.Clear();
+            _jArray.Add(_alice);
+            _jArray.Add(_bob);
+        }
 
-    [Benchmark]
-    public void TestClone()
-    {
-        _jArray.Clear();
-        _jArray.Add(_alice);
-        _ = (JArray)_jArray.Clone();
-    }
+        [Benchmark]
+        public void TestSetItem()
+        {
+            _jArray.Clear();
+            _jArray.Add(_alice);
+            _jArray[0] = _bob;
+        }
 
-    [Benchmark]
-    public void TestAddNull()
-    {
-        _jArray.Clear();
-        _jArray.Add(null);
-    }
+        [Benchmark]
+        public void TestClear()
+        {
+            _jArray.Clear();
+        }
 
-    [Benchmark]
-    public void TestSetNull()
-    {
-        _jArray.Clear();
-        _jArray.Add(_alice);
-        _jArray[0] = null;
-    }
+        [Benchmark]
+        public void TestContains()
+        {
+            _jArray.Clear();
+            _jArray.Add(_alice);
+            _ = _jArray.Contains(_alice);
+        }
 
-    [Benchmark]
-    public void TestInsertNull()
-    {
-        _jArray.Clear();
-        _jArray.Add(_alice);
-        _jArray.Insert(0, null);
-    }
+        [Benchmark]
+        public void TestCopyTo()
+        {
+            _jArray.Clear();
+            _jArray.Add(_alice);
+            _jArray.Add(_bob);
 
-    [Benchmark]
-    public void TestRemoveNull()
-    {
-        _jArray.Clear();
-        _jArray.Add(null);
-        _jArray.Remove(null);
+            var objects = new JObject[2];
+            _jArray.CopyTo(objects, 0);
+        }
+
+        [Benchmark]
+        public void TestInsert()
+        {
+            _jArray.Clear();
+            _jArray.Add(_alice);
+            _jArray.Insert(0, _bob);
+        }
+
+        [Benchmark]
+        public void TestIndexOf()
+        {
+            _jArray.Clear();
+            _jArray.Add(_alice);
+            _ = _jArray.IndexOf(_alice);
+        }
+
+        [Benchmark]
+        public void TestRemove()
+        {
+            _jArray.Clear();
+            _jArray.Add(_alice);
+            _jArray.Remove(_alice);
+        }
+
+        [Benchmark]
+        public void TestRemoveAt()
+        {
+            _jArray.Clear();
+            _jArray.Add(_alice);
+            _jArray.Add(_bob);
+            _jArray.RemoveAt(1);
+        }
+
+        [Benchmark]
+        public void TestGetEnumerator()
+        {
+            _jArray.Clear();
+            _jArray.Add(_alice);
+            _jArray.Add(_bob);
+            foreach (var item in _jArray)
+            {
+                // Do nothing, just enumerate
+            }
+        }
+
+        [Benchmark]
+        public void TestCount()
+        {
+            _jArray.Clear();
+            _jArray.Add(_alice);
+            _jArray.Add(_bob);
+            _ = _jArray.Count;
+        }
+
+        [Benchmark]
+        public void TestClone()
+        {
+            _jArray.Clear();
+            _jArray.Add(_alice);
+            _ = (JArray)_jArray.Clone();
+        }
+
+        [Benchmark]
+        public void TestAddNull()
+        {
+            _jArray.Clear();
+            _jArray.Add(null);
+        }
+
+        [Benchmark]
+        public void TestSetNull()
+        {
+            _jArray.Clear();
+            _jArray.Add(_alice);
+            _jArray[0] = null;
+        }
+
+        [Benchmark]
+        public void TestInsertNull()
+        {
+            _jArray.Clear();
+            _jArray.Add(_alice);
+            _jArray.Insert(0, null);
+        }
+
+        [Benchmark]
+        public void TestRemoveNull()
+        {
+            _jArray.Clear();
+            _jArray.Add(null);
+            _jArray.Remove(null);
+        }
     }
 }
 

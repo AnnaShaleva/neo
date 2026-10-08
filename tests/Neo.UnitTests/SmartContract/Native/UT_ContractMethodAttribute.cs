@@ -9,63 +9,190 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.Persistence;
 using Neo.SmartContract;
 using Neo.SmartContract.Native;
 using System.Reflection;
 
-namespace Neo.UnitTests.SmartContract.Native;
-
-[TestClass]
-public class UT_ContractMethodAttribute
+namespace Neo.UnitTests.SmartContract.Native
 {
-    [TestMethod]
-    public void TestConstructorOneArg()
+    [TestClass]
+    public class UT_ContractMethodAttribute
     {
-        var arg = new ContractMethodAttribute();
-        Assert.IsNull(arg.ActiveIn);
-    }
-
-    class NeedSnapshot
-    {
-        [ContractMethod]
-        public static bool MethodReadOnlyStoreView(IReadOnlyStore view) => view is null;
-
-        [ContractMethod]
-        public static bool MethodDataCache(DataCache dataCache) => dataCache is null;
-    }
-
-    class NoNeedSnapshot
-    {
-        [ContractMethod]
-        public static bool MethodTwo(ApplicationEngine engine, UInt160 account)
-            => engine is null || account is null;
-
-        [ContractMethod]
-        public static bool MethodOne(ApplicationEngine engine) => engine is null;
-    }
-
-    [TestMethod]
-    public void TestNeedSnapshot()
-    {
-        var flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
-        foreach (var member in typeof(NeedSnapshot).GetMembers(flags))
+        [TestMethod]
+        public void TestConstructorOneArg()
         {
-            foreach (var attribute in member.GetCustomAttributes<ContractMethodAttribute>())
+            var arg = new ContractMethodAttribute();
+
+            Assert.IsNull(arg.ActiveIn);
+
+            arg = new ContractMethodAttribute(Hardfork.HF_Aspidochelone);
+
+            Assert.AreEqual(Hardfork.HF_Aspidochelone, arg.ActiveIn);
+        }
+
+        class NeedSnapshot
+        {
+            [ContractMethod]
+            public bool MethodReadOnlyStoreView(IReadOnlyStore view) => view is null;
+
+            [ContractMethod]
+            public bool MethodDataCache(DataCache dataCache) => dataCache is null;
+        }
+
+        class NoNeedSnapshot
+        {
+            [ContractMethod]
+            public bool MethodTwo(ApplicationEngine engine, UInt160 account)
+                => engine is null || account is null;
+
+            [ContractMethod]
+            public bool MethodOne(ApplicationEngine engine) => engine is null;
+        }
+
+        [TestMethod]
+        public void TestNeedSnapshot()
+        {
+            var flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
+            foreach (var member in typeof(NeedSnapshot).GetMembers(flags))
             {
-                var metadata = new ContractMethodMetadata(member, attribute);
-                Assert.IsTrue(metadata.NeedSnapshot);
+                foreach (var attribute in member.GetCustomAttributes<ContractMethodAttribute>())
+                {
+                    var metadata = new ContractMethodMetadata(member, attribute);
+                    Assert.IsTrue(metadata.NeedSnapshot);
+                }
+            }
+
+            foreach (var member in typeof(NoNeedSnapshot).GetMembers(flags))
+            {
+                foreach (var attribute in member.GetCustomAttributes<ContractMethodAttribute>())
+                {
+                    var metadata = new ContractMethodMetadata(member, attribute);
+                    Assert.IsFalse(metadata.NeedSnapshot);
+                    Assert.IsTrue(metadata.NeedApplicationEngine);
+                }
             }
         }
 
-        foreach (var member in typeof(NoNeedSnapshot).GetMembers(flags))
+        class TestParameterDetection
         {
-            foreach (var attribute in member.GetCustomAttributes<ContractMethodAttribute>())
+            [ContractMethod]
+            public void MethodWithIReadOnlyStore(IReadOnlyStore snapshot, UInt160 account) { }
+
+            [ContractMethod]
+            public void MethodWithDataCache(DataCache snapshot, UInt160 account) { }
+
+            [ContractMethod]
+            public void MethodWithApplicationEngine(ApplicationEngine engine, UInt160 account) { }
+
+            [ContractMethod]
+            public void MethodWithNormalParameter(UInt160 account) { }
+
+            [ContractMethod]
+            public void MethodWithIReadOnlyStoreOnly(IReadOnlyStore snapshot) { }
+
+            [ContractMethod]
+            public void MethodWithDataCacheOnly(DataCache snapshot) { }
+        }
+
+        // Custom class to test parameter type restriction: implements IReadOnlyStore but is not DataCache
+        // This should NOT be accepted as a parameter type - only IReadOnlyStore interface itself or DataCache are allowed
+        class CustomReadOnlyStore : IReadOnlyStore
+        {
+            public StorageItem this[StorageKey key] => throw new System.NotImplementedException();
+            public bool Contains(StorageKey key) => throw new System.NotImplementedException();
+            public System.Collections.Generic.IEnumerable<(StorageKey Key, StorageItem Value)> Find(StorageKey key_prefix = null, SeekDirection direction = SeekDirection.Forward, int skip = 0) => throw new System.NotImplementedException();
+            public StorageItem TryGet(StorageKey key) => null;
+            public bool TryGet(StorageKey key, out StorageItem value)
             {
-                var metadata = new ContractMethodMetadata(member, attribute);
-                Assert.IsFalse(metadata.NeedSnapshot);
-                Assert.IsTrue(metadata.NeedApplicationEngine);
+                value = null;
+                return false;
             }
+        }
+
+        class TestBugDetection
+        {
+            [ContractMethod]
+            public void MethodWithCustomReadOnlyStore(CustomReadOnlyStore snapshot, UInt160 account) { }
+        }
+
+        [TestMethod]
+        public void TestParameterDetectionAndSkipping()
+        {
+            // This test specifically verifies the fix for the bug where IsAssignableFrom.
+            var flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
+            var testType = typeof(TestParameterDetection);
+
+            // Test IReadOnlyStore parameter detection
+            var methodIReadOnlyStore = testType.GetMethod(nameof(TestParameterDetection.MethodWithIReadOnlyStore), flags);
+            var metadataIReadOnlyStore = new ContractMethodMetadata(methodIReadOnlyStore!, new ContractMethodAttribute());
+            Assert.IsTrue(metadataIReadOnlyStore.NeedSnapshot, "IReadOnlyStore parameter should set NeedSnapshot to true");
+            Assert.IsFalse(metadataIReadOnlyStore.NeedApplicationEngine, "IReadOnlyStore parameter should not set NeedApplicationEngine to true");
+            Assert.AreEqual(1, metadataIReadOnlyStore.Parameters.Length, "IReadOnlyStore parameter should be skipped, leaving only UInt160");
+            Assert.AreEqual(typeof(UInt160), metadataIReadOnlyStore.Parameters[0].Type, "Remaining parameter should be UInt160");
+
+            // Test DataCache parameter detection
+            var methodDataCache = testType.GetMethod(nameof(TestParameterDetection.MethodWithDataCache), flags);
+            var metadataDataCache = new ContractMethodMetadata(methodDataCache!, new ContractMethodAttribute());
+            Assert.IsTrue(metadataDataCache.NeedSnapshot, "DataCache parameter should set NeedSnapshot to true");
+            Assert.IsFalse(metadataDataCache.NeedApplicationEngine, "DataCache parameter should not set NeedApplicationEngine to true");
+            Assert.AreEqual(1, metadataDataCache.Parameters.Length, "DataCache parameter should be skipped, leaving only UInt160");
+            Assert.AreEqual(typeof(UInt160), metadataDataCache.Parameters[0].Type, "Remaining parameter should be UInt160");
+
+            // Test ApplicationEngine parameter detection
+            var methodApplicationEngine = testType.GetMethod(nameof(TestParameterDetection.MethodWithApplicationEngine), flags);
+            var metadataApplicationEngine = new ContractMethodMetadata(methodApplicationEngine!, new ContractMethodAttribute());
+            Assert.IsTrue(metadataApplicationEngine.NeedApplicationEngine, "ApplicationEngine parameter should set NeedApplicationEngine to true");
+            Assert.IsFalse(metadataApplicationEngine.NeedSnapshot, "ApplicationEngine parameter should not set NeedSnapshot to true");
+            Assert.AreEqual(1, metadataApplicationEngine.Parameters.Length, "ApplicationEngine parameter should be skipped, leaving only UInt160");
+            Assert.AreEqual(typeof(UInt160), metadataApplicationEngine.Parameters[0].Type, "Remaining parameter should be UInt160");
+
+            // Test normal parameter (no special parameter)
+            var methodNormal = testType.GetMethod(nameof(TestParameterDetection.MethodWithNormalParameter), flags);
+            var metadataNormal = new ContractMethodMetadata(methodNormal!, new ContractMethodAttribute());
+            Assert.IsFalse(metadataNormal.NeedSnapshot, "Normal parameter should not set NeedSnapshot to true");
+            Assert.IsFalse(metadataNormal.NeedApplicationEngine, "Normal parameter should not set NeedApplicationEngine to true");
+            Assert.AreEqual(1, metadataNormal.Parameters.Length, "Normal parameter should not be skipped");
+            Assert.AreEqual(typeof(UInt160), metadataNormal.Parameters[0].Type, "Parameter should be UInt160");
+
+            // Test IReadOnlyStore only (no other parameters)
+            var methodIReadOnlyStoreOnly = testType.GetMethod(nameof(TestParameterDetection.MethodWithIReadOnlyStoreOnly), flags);
+            var metadataIReadOnlyStoreOnly = new ContractMethodMetadata(methodIReadOnlyStoreOnly!, new ContractMethodAttribute());
+            Assert.IsTrue(metadataIReadOnlyStoreOnly.NeedSnapshot, "IReadOnlyStore parameter should set NeedSnapshot to true");
+            Assert.AreEqual(0, metadataIReadOnlyStoreOnly.Parameters.Length, "IReadOnlyStore parameter should be skipped, leaving no parameters");
+
+            // Test DataCache only (no other parameters)
+            var methodDataCacheOnly = testType.GetMethod(nameof(TestParameterDetection.MethodWithDataCacheOnly), flags);
+            var metadataDataCacheOnly = new ContractMethodMetadata(methodDataCacheOnly!, new ContractMethodAttribute());
+            Assert.IsTrue(metadataDataCacheOnly.NeedSnapshot, "DataCache parameter should set NeedSnapshot to true");
+            Assert.AreEqual(0, metadataDataCacheOnly.Parameters.Length, "DataCache parameter should be skipped, leaving no parameters");
+        }
+
+        [TestMethod]
+        public void TestBugDetectionWithCustomReadOnlyStore()
+        {
+            // This test verifies that CustomReadOnlyStore (a custom implementation of IReadOnlyStore)
+            // is NOT accepted as a parameter type. Only IReadOnlyStore interface itself or DataCache
+            // (and its subclasses) are allowed.
+            var flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
+            var testType = typeof(TestBugDetection);
+
+            var method = testType.GetMethod(nameof(TestBugDetection.MethodWithCustomReadOnlyStore), flags);
+            var metadata = new ContractMethodMetadata(method!, new ContractMethodAttribute());
+
+            // CustomReadOnlyStore should NOT be accepted, even though it implements IReadOnlyStore
+            // Only IReadOnlyStore interface itself or DataCache are allowed
+            Assert.IsFalse(metadata.NeedSnapshot,
+                "CustomReadOnlyStore (implements IReadOnlyStore) should NOT set NeedSnapshot to true. " +
+                "Only IReadOnlyStore interface itself or DataCache are allowed as parameter types.");
+            Assert.IsFalse(metadata.NeedApplicationEngine,
+                "CustomReadOnlyStore should not set NeedApplicationEngine to true");
+            // Since NeedSnapshot is false, the parameter should not be skipped
+            Assert.AreEqual(2, metadata.Parameters.Length,
+                "CustomReadOnlyStore parameter should not be skipped, leaving both CustomReadOnlyStore and UInt160");
+            Assert.AreEqual(typeof(UInt160), metadata.Parameters[1].Type,
+                "Second parameter should be UInt160");
         }
     }
 }

@@ -11,24 +11,28 @@
 
 using Neo.Network.P2P.Capabilities;
 using Neo.Network.P2P.Payloads;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
-namespace Neo.Network.P2P;
-
-internal class TaskSession
+namespace Neo.Network.P2P
 {
-    public Dictionary<UInt256, DateTime> InvTasks { get; } = new Dictionary<UInt256, DateTime>();
-    public Dictionary<uint, DateTime> IndexTasks { get; } = new Dictionary<uint, DateTime>();
-    public HashSet<UInt256> AvailableTasks { get; } = new HashSet<UInt256>();
-    public Dictionary<uint, Block> ReceivedBlock { get; } = new Dictionary<uint, Block>();
-    public bool HasTooManyTasks => InvTasks.Count + IndexTasks.Count >= 100;
-    public bool IsFullNode { get; }
-    public uint LastBlockIndex { get; set; }
-    public bool MempoolSent { get; set; }
-
-    public TaskSession(VersionPayload version)
+    internal class TaskSession
     {
-        var fullNode = version.Capabilities.OfType<FullNodeCapability>().FirstOrDefault();
-        IsFullNode = fullNode != null;
-        LastBlockIndex = fullNode?.StartHeight ?? 0;
+        public Dictionary<UInt256, DateTime> InvTasks { get; } = new Dictionary<UInt256, DateTime>();
+        public Dictionary<uint, DateTime> IndexTasks { get; } = new Dictionary<uint, DateTime>();
+        public HashSet<UInt256> AvailableTasks { get; } = new HashSet<UInt256>();
+        public Dictionary<uint, UInt256> ReceivedBlockHashes { get; } = new Dictionary<uint, UInt256>();
+        public bool HasTooManyTasks => InvTasks.Count + IndexTasks.Count >= 100;
+        public bool IsFullNode { get; }
+        public uint LastBlockIndex { get; set; }
+        public bool MempoolSent { get; set; }
+
+        public TaskSession(VersionPayload version)
+        {
+            var fullNode = version.Capabilities.OfType<FullNodeCapability>().FirstOrDefault();
+            IsFullNode = fullNode != null;
+            LastBlockIndex = fullNode?.StartHeight ?? 0;
+        }
     }
 }

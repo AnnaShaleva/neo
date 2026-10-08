@@ -9,39 +9,71 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-using Neo.Extensions.VM;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Neo.Extensions;
 using Neo.SmartContract.Native;
 using Neo.VM;
 using Newtonsoft.Json;
 
-namespace Neo.UnitTests.GasTests;
-
-[TestClass]
-public class GenerateGasFixturesTests
+namespace Neo.UnitTests.GasTests
 {
-    [TestMethod]
-    public void StdLibTest()
+    [TestClass]
+    public class GenerateGasFixturesTests
     {
-        var fixture = new GasTestFixture()
+        [TestMethod]
+        public void StdLibTest()
         {
-            Execute =
-            [
-                new ()
-                {
-                    // itoa
-                    Script = new ScriptBuilder().EmitDynamicCall(NativeContract.StdLib.Hash, "itoa", [1]).ToArray(),
-                    Fee = 1167960
-                },
-                new ()
-                {
-                    // atoi
-                    Script = new ScriptBuilder().EmitDynamicCall(NativeContract.StdLib.Hash, "atoi", ["1"]).ToArray(),
-                    Fee = 1047210
-                }
-            ]
-        };
+            var fixtureA = new GasTestFixture()
+            {
+                Name = "Test Stdlib with default execution fee",
+                Execute =
+                [
+                    new ()
+                    {
+                        // itoa
+                        Script = new ScriptBuilder().EmitDynamicCall(NativeContract.StdLib.Hash, "itoa", [1]).ToArray(),
+                        Fee = 1167960
+                    },
+                    new ()
+                    {
+                        // atoi
+                        Script = new ScriptBuilder().EmitDynamicCall(NativeContract.StdLib.Hash, "atoi", ["1"]).ToArray(),
+                        Fee = 1047210
+                    }
+                ]
+            };
 
-        var json = JsonConvert.SerializeObject(fixture);
-        Assert.IsNotNull(json);
+            // With half execution fee
+
+            var fixtureB = new GasTestFixture()
+            {
+                Name = "Test Stdlib with half default execution fee",
+                Environment = new GasTestFixture.EnvironmentState()
+                {
+                    Policy = new GasTestFixture.PolicyValues()
+                    {
+                        ExecutionFee = 15_0000
+                    }
+                },
+                Execute =
+                [
+                    new ()
+                    {
+                        // itoa
+                        Script = new ScriptBuilder().EmitDynamicCall(NativeContract.StdLib.Hash, "itoa", [1]).ToArray(),
+                        Fee = 583980
+                    },
+                    new ()
+                    {
+                        // atoi
+                        Script = new ScriptBuilder().EmitDynamicCall(NativeContract.StdLib.Hash, "atoi", ["1"]).ToArray(),
+                        Fee = 523605
+                    }
+                ]
+            };
+
+            var json = JsonConvert.SerializeObject(new GasTestFixture[] { fixtureA, fixtureB });
+            Assert.IsNotNull(json);
+        }
     }
 }

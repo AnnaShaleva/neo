@@ -9,25 +9,26 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.Ledger;
-
-/// <summary>
-/// The reason a transaction was removed.
-/// </summary>
-public enum TransactionRemovalReason : byte
+namespace Neo.Ledger
 {
     /// <summary>
-    /// The transaction was rejected since it was the lowest priority transaction and the memory pool capacity was exceeded.
+    /// The reason a transaction was removed.
     /// </summary>
-    CapacityExceeded,
+    public enum TransactionRemovalReason : byte
+    {
+        /// <summary>
+        /// The transaction was rejected since it was the lowest priority transaction and the memory pool capacity was exceeded.
+        /// </summary>
+        CapacityExceeded,
 
-    /// <summary>
-    /// The transaction was rejected due to failing re-validation after a block was persisted.
-    /// </summary>
-    NoLongerValid,
+        /// <summary>
+        /// The transaction was rejected due to failing re-validation after a block was persisted.
+        /// </summary>
+        NoLongerValid,
 
-    /// <summary>
-    /// The transaction was rejected due to conflict with higher priority transactions with Conflicts attribute.
-    /// </summary>
-    Conflict,
+        /// <summary>
+        /// The transaction was rejected due to conflict with higher priority transactions with Conflicts attribute.
+        /// </summary>
+        Conflict,
+    }
 }

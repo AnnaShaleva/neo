@@ -9,67 +9,71 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.Json;
 using Neo.SmartContract.Manifest;
 using Neo.SmartContract.Native;
 using Neo.Wallets;
+using System;
+using System.IO;
 using System.Security.Cryptography;
 
-namespace Neo.UnitTests.SmartContract.Manifest;
-
-[TestClass]
-public class UT_ContractPermissionDescriptor
+namespace Neo.UnitTests.SmartContract.Manifest
 {
-    [TestMethod]
-    public void TestCreateByECPointAndIsWildcard()
+    [TestClass]
+    public class UT_ContractPermissionDescriptor
     {
-        byte[] privateKey = new byte[32];
-        RandomNumberGenerator rng = RandomNumberGenerator.Create();
-        rng.GetBytes(privateKey);
-        var key = new KeyPair(privateKey);
-        ContractPermissionDescriptor contractPermissionDescriptor = ContractPermissionDescriptor.Create(key.PublicKey);
-        Assert.IsNotNull(contractPermissionDescriptor);
-        Assert.AreEqual(key.PublicKey, contractPermissionDescriptor.Group);
-        Assert.IsFalse(contractPermissionDescriptor.IsWildcard);
-    }
-
-    [TestMethod]
-    public void TestContractPermissionDescriptorFromAndToJson()
-    {
-        byte[] privateKey = new byte[32];
-        RandomNumberGenerator rng = RandomNumberGenerator.Create();
-        rng.GetBytes(privateKey);
-        var key = new KeyPair(privateKey);
-        ContractPermissionDescriptor temp = ContractPermissionDescriptor.Create(key.PublicKey);
-        ContractPermissionDescriptor result = ContractPermissionDescriptor.FromJson(temp.ToJson());
-        Assert.IsNull(result.Hash);
-        Assert.AreEqual(result.Group, result.Group);
-        Assert.ThrowsExactly<FormatException>(() => _ = ContractPermissionDescriptor.FromJson(string.Empty));
-    }
-
-    [TestMethod]
-    public void TestContractManifestFromJson()
-    {
-        Assert.ThrowsExactly<NullReferenceException>(() => _ = ContractManifest.FromJson(new JObject()));
-        var jsonFiles = Directory.GetFiles(Path.Combine("SmartContract", "Manifest", "TestFile"));
-        foreach (var item in jsonFiles)
+        [TestMethod]
+        public void TestCreateByECPointAndIsWildcard()
         {
-            var json = (JObject)JToken.Parse(File.ReadAllText(item))!;
-            var manifest = ContractManifest.FromJson(json);
-            Assert.AreEqual(manifest.ToJson().ToString(), json.ToString());
+            byte[] privateKey = new byte[32];
+            RandomNumberGenerator rng = RandomNumberGenerator.Create();
+            rng.GetBytes(privateKey);
+            KeyPair key = new KeyPair(privateKey);
+            ContractPermissionDescriptor contractPermissionDescriptor = ContractPermissionDescriptor.Create(key.PublicKey);
+            Assert.IsNotNull(contractPermissionDescriptor);
+            Assert.AreEqual(key.PublicKey, contractPermissionDescriptor.Group);
+            Assert.IsFalse(contractPermissionDescriptor.IsWildcard);
         }
-    }
 
-    [TestMethod]
-    public void TestEquals()
-    {
-        var descriptor1 = ContractPermissionDescriptor.CreateWildcard();
-        var descriptor2 = ContractPermissionDescriptor.Create(NativeContract.Governance.NeoTokenId);
+        [TestMethod]
+        public void TestContractPermissionDescriptorFromAndToJson()
+        {
+            byte[] privateKey = new byte[32];
+            RandomNumberGenerator rng = RandomNumberGenerator.Create();
+            rng.GetBytes(privateKey);
+            KeyPair key = new KeyPair(privateKey);
+            ContractPermissionDescriptor temp = ContractPermissionDescriptor.Create(key.PublicKey);
+            ContractPermissionDescriptor result = ContractPermissionDescriptor.FromJson(temp.ToJson());
+            Assert.IsNull(result.Hash);
+            Assert.AreEqual(result.Group, result.Group);
+            Assert.ThrowsExactly<FormatException>(() => _ = ContractPermissionDescriptor.FromJson(string.Empty));
+        }
 
-        Assert.AreNotEqual(descriptor1, descriptor2);
+        [TestMethod]
+        public void TestContractManifestFromJson()
+        {
+            Assert.ThrowsExactly<NullReferenceException>(() => _ = ContractManifest.FromJson(new JObject()));
+            var jsonFiles = Directory.GetFiles(Path.Combine("SmartContract", "Manifest", "TestFile"));
+            foreach (var item in jsonFiles)
+            {
+                var json = JObject.Parse(File.ReadAllText(item)) as JObject;
+                var manifest = ContractManifest.FromJson(json);
+                Assert.AreEqual(manifest.ToJson().ToString(), json.ToString());
+            }
+        }
 
-        var descriptor3 = ContractPermissionDescriptor.Create(NativeContract.Governance.NeoTokenId);
+        [TestMethod]
+        public void TestEquals()
+        {
+            var descriptor1 = ContractPermissionDescriptor.CreateWildcard();
+            var descriptor2 = ContractPermissionDescriptor.Create(LedgerContract.NEO.Hash);
 
-        Assert.AreEqual(descriptor2, descriptor3);
+            Assert.AreNotEqual(descriptor1, descriptor2);
+
+            var descriptor3 = ContractPermissionDescriptor.Create(LedgerContract.NEO.Hash);
+
+            Assert.AreEqual(descriptor2, descriptor3);
+        }
     }
 }

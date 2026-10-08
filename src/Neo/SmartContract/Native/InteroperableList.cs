@@ -12,45 +12,47 @@
 using Neo.VM;
 using Neo.VM.Types;
 using System.Collections;
-using Array = Neo.VM.Types.Array;
+using System.Collections.Generic;
+using System.Linq;
 
-namespace Neo.SmartContract.Native;
-
-abstract class InteroperableList<T> : IList<T>, IInteroperable
+namespace Neo.SmartContract.Native
 {
-    private List<T> List => field ??= new();
-
-    public T this[int index] { get => List[index]; set => List[index] = value; }
-    public int Count => List.Count;
-    public bool IsReadOnly => false;
-
-    public void Add(T item) => List.Add(item);
-    public void AddRange(IEnumerable<T> collection) => List.AddRange(collection);
-    public void Clear() => List.Clear();
-    public bool Contains(T item) => List.Contains(item);
-    public void CopyTo(T[] array, int arrayIndex) => List.CopyTo(array, arrayIndex);
-    IEnumerator IEnumerable.GetEnumerator() => List.GetEnumerator();
-    public IEnumerator<T> GetEnumerator() => List.GetEnumerator();
-    public int IndexOf(T item) => List.IndexOf(item);
-    public void Insert(int index, T item) => List.Insert(index, item);
-    public bool Remove(T item) => List.Remove(item);
-    public void RemoveAt(int index) => List.RemoveAt(index);
-    public void Sort() => List.Sort();
-
-    protected abstract T ElementFromStackItem(StackItem item);
-    protected abstract StackItem ElementToStackItem(T element, IReferenceCounter? referenceCounter);
-
-    public void FromStackItem(StackItem stackItem)
+    abstract class InteroperableList<T> : IList<T>, IInteroperable
     {
-        List.Clear();
-        foreach (StackItem item in (Array)stackItem)
+        private List<T> List => field ??= new();
+
+        public T this[int index] { get => List[index]; set => List[index] = value; }
+        public int Count => List.Count;
+        public bool IsReadOnly => false;
+
+        public void Add(T item) => List.Add(item);
+        public void AddRange(IEnumerable<T> collection) => List.AddRange(collection);
+        public void Clear() => List.Clear();
+        public bool Contains(T item) => List.Contains(item);
+        public void CopyTo(T[] array, int arrayIndex) => List.CopyTo(array, arrayIndex);
+        IEnumerator IEnumerable.GetEnumerator() => List.GetEnumerator();
+        public IEnumerator<T> GetEnumerator() => List.GetEnumerator();
+        public int IndexOf(T item) => List.IndexOf(item);
+        public void Insert(int index, T item) => List.Insert(index, item);
+        public bool Remove(T item) => List.Remove(item);
+        public void RemoveAt(int index) => List.RemoveAt(index);
+        public void Sort() => List.Sort();
+
+        protected abstract T ElementFromStackItem(StackItem item);
+        protected abstract StackItem ElementToStackItem(T element);
+
+        public void FromStackItem(StackItem stackItem)
         {
-            Add(ElementFromStackItem(item));
+            List.Clear();
+            foreach (StackItem item in (Array)stackItem)
+            {
+                Add(ElementFromStackItem(item));
+            }
         }
-    }
 
-    public StackItem ToStackItem(IReferenceCounter? referenceCounter)
-    {
-        return new Array(referenceCounter, this.Select(p => ElementToStackItem(p, referenceCounter)));
+        public StackItem ToStackItem()
+        {
+            return new Array(this.Select(p => ElementToStackItem(p)));
+        }
     }
 }

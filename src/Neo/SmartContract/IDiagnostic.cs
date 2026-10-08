@@ -12,15 +12,16 @@
 using Neo.VM;
 using Neo.VM.Types;
 
-namespace Neo.SmartContract;
-
-public interface IDiagnostic
+namespace Neo.SmartContract
 {
-    void Initialized(ApplicationEngine engine);
-    void Disposed();
-    void ContextLoaded(VM.ExecutionContext context);
-    void ContextUnloaded(VM.ExecutionContext context);
-    void PreExecuteInstruction(Instruction instruction);
-    void PostExecuteInstruction(Instruction instruction);
-    void CallFromNative(UInt160 hash, string method, StackItem[] args);
+    public interface IDiagnostic
+    {
+        void Initialized(ApplicationEngine engine);
+        void Disposed();
+        void ContextLoaded(ExecutionContext context);
+        void ContextUnloaded(ExecutionContext context);
+        void PreExecuteInstruction(Instruction instruction);
+        void PostExecuteInstruction(Instruction instruction);
+        void CallFromNative(UInt160 hash, string method, StackItem[] args);
+    }
 }

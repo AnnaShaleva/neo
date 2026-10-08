@@ -10,81 +10,85 @@
 // modifications are permitted.
 
 using Neo.Json;
+using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 
-namespace Neo.SmartContract.Manifest;
-
-/// <summary>
-/// A list that supports wildcard.
-/// </summary>
-/// <typeparam name="T">The type of the elements.</typeparam>
-public class WildcardContainer<T> : IReadOnlyList<T>
+namespace Neo.SmartContract.Manifest
 {
-    private readonly T[]? _data;
-
-    public T this[int index] => _data![index];
-
-    public int Count => _data?.Length ?? 0;
-
     /// <summary>
-    /// Indicates whether the list is a wildcard.
+    /// A list that supports wildcard.
     /// </summary>
-    public bool IsWildcard => _data is null;
-
-    private WildcardContainer(T[]? data)
+    /// <typeparam name="T">The type of the elements.</typeparam>
+    public class WildcardContainer<T> : IReadOnlyList<T>
     {
-        _data = data;
-    }
+        private readonly T[]? _data;
 
-    /// <summary>
-    /// Creates a new instance of the <see cref="WildcardContainer{T}"/> class with the initial elements.
-    /// </summary>
-    /// <param name="data">The initial elements.</param>
-    /// <returns>The created list.</returns>
-    public static WildcardContainer<T> Create(params T[] data) => new(data);
+        public T this[int index] => _data![index];
 
-    /// <summary>
-    /// Creates a new instance of the <see cref="WildcardContainer{T}"/> class with wildcard.
-    /// </summary>
-    /// <returns>The created list.</returns>
-    public static WildcardContainer<T> CreateWildcard() => new(null);
+        public int Count => _data?.Length ?? 0;
 
-    /// <summary>
-    /// Converts the list from a JSON object.
-    /// </summary>
-    /// <param name="json">The list represented by a JSON object.</param>
-    /// <param name="elementSelector">A converter for elements.</param>
-    /// <returns>The converted list.</returns>
-    public static WildcardContainer<T> FromJson(JToken json, Func<JToken, T> elementSelector)
-    {
-        switch (json)
+        /// <summary>
+        /// Indicates whether the list is a wildcard.
+        /// </summary>
+        public bool IsWildcard => _data is null;
+
+        private WildcardContainer(T[]? data)
         {
-            case JString str:
-                if (str.Value != "*") throw new FormatException($"Invalid wildcard('{str.Value}')");
-                return CreateWildcard();
-            case JArray array:
-                return Create(array.Select(p => elementSelector(p!)).ToArray());
-            default:
-                throw new FormatException($"Invalid json type for wildcard({json.GetType()})");
+            _data = data;
         }
-    }
 
-    public IEnumerator<T> GetEnumerator()
-    {
-        if (_data == null) return ((IReadOnlyList<T>)Array.Empty<T>()).GetEnumerator();
+        /// <summary>
+        /// Creates a new instance of the <see cref="WildcardContainer{T}"/> class with the initial elements.
+        /// </summary>
+        /// <param name="data">The initial elements.</param>
+        /// <returns>The created list.</returns>
+        public static WildcardContainer<T> Create(params T[] data) => new(data);
 
-        return ((IReadOnlyList<T>)_data).GetEnumerator();
-    }
+        /// <summary>
+        /// Creates a new instance of the <see cref="WildcardContainer{T}"/> class with wildcard.
+        /// </summary>
+        /// <returns>The created list.</returns>
+        public static WildcardContainer<T> CreateWildcard() => new(null);
 
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        /// <summary>
+        /// Converts the list from a JSON object.
+        /// </summary>
+        /// <param name="json">The list represented by a JSON object.</param>
+        /// <param name="elementSelector">A converter for elements.</param>
+        /// <returns>The converted list.</returns>
+        public static WildcardContainer<T> FromJson(JToken json, Func<JToken, T> elementSelector)
+        {
+            switch (json)
+            {
+                case JString str:
+                    if (str.Value != "*") throw new FormatException($"Invalid wildcard('{str.Value}')");
+                    return CreateWildcard();
+                case JArray array:
+                    return Create(array.Select(p => elementSelector(p!)).ToArray());
+                default:
+                    throw new FormatException($"Invalid json type for wildcard({json.GetType()})");
+            }
+        }
 
-    /// <summary>
-    /// Converts the list to a JSON object.
-    /// </summary>
-    /// <returns>The list represented by a JSON object.</returns>
-    public JToken ToJson(Func<T, JToken> elementSelector)
-    {
-        if (IsWildcard) return "*";
-        return _data!.Select(p => elementSelector(p)).ToArray();
+        public IEnumerator<T> GetEnumerator()
+        {
+            if (_data == null) return ((IReadOnlyList<T>)Array.Empty<T>()).GetEnumerator();
+
+            return ((IReadOnlyList<T>)_data).GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        /// <summary>
+        /// Converts the list to a JSON object.
+        /// </summary>
+        /// <returns>The list represented by a JSON object.</returns>
+        public JToken ToJson(Func<T, JToken> elementSelector)
+        {
+            if (IsWildcard) return "*";
+            return _data!.Select(p => elementSelector(p)).ToArray();
+        }
     }
 }

@@ -13,171 +13,163 @@ using Neo.Cryptography;
 using Neo.SmartContract;
 using Neo.Wallets.NEP6;
 using Org.BouncyCastle.Crypto.Generators;
+using System;
 using System.Security.Cryptography;
 using System.Text;
 using static Neo.Wallets.Helper;
 using ECCurve = Neo.Cryptography.ECC.ECCurve;
 using ECPoint = Neo.Cryptography.ECC.ECPoint;
 
-namespace Neo.Wallets;
-
-/// <summary>
-/// Represents a private/public key pair in wallets.
-/// </summary>
-public class KeyPair : IEquatable<KeyPair>
+namespace Neo.Wallets
 {
     /// <summary>
-    /// The private key.
+    /// Represents a private/public key pair in wallets.
     /// </summary>
-    public readonly byte[] PrivateKey;
-
-    /// <summary>
-    /// The public key.
-    /// </summary>
-    public readonly ECPoint PublicKey;
-
-    /// <summary>
-    /// The hash of the public key.
-    /// </summary>
-    public UInt160 PublicKeyHash => PublicKey.EncodePoint(true).ToScriptHash();
-
-    /// <summary>
-    /// Initializes a new instance of the KeyPair class using a randomly generated 32-byte private key.
-    /// </summary>
-    /// <remarks>This constructor generates a cryptographically secure random private key for the key pair.
-    /// Use this overload when you want to create a new key pair with a unique, unpredictable private key suitable for
-    /// cryptographic operations.</remarks>
-    public KeyPair() : this(RandomNumberGenerator.GetBytes(32))
+    public class KeyPair : IEquatable<KeyPair>
     {
-    }
+        /// <summary>
+        /// The private key.
+        /// </summary>
+        public readonly byte[] PrivateKey;
 
-    /// <summary>
-    /// Initializes a new instance of the KeyPair class using the specified private key.
-    /// </summary>
-    /// <remarks>This constructor defaults to using the Secp256r1 (NIST P-256) elliptic curve. Use the other
-    /// constructor to specify a different curve if needed.</remarks>
-    /// <param name="privateKey">A byte array containing the private key to use for generating the key pair.</param>
-    public KeyPair(byte[] privateKey) : this(privateKey, ECCurve.Secp256r1)
-    {
-    }
+        /// <summary>
+        /// The public key.
+        /// </summary>
+        public readonly ECPoint PublicKey;
 
-    /// <summary>
-    /// Initializes a new instance of the KeyPair class using the specified private key and elliptic curve.
-    /// </summary>
-    /// <remarks>If privateKey is 32 bytes, the public key is derived from the curve's generator point and the
-    /// private key. For longer privateKey values, the public key is extracted from the provided bytes. The format of
-    /// privateKey must match the expected format for the specified curve.</remarks>
-    /// <param name="privateKey">A byte array containing the private key. Must be 32, 96, or 104 bytes in length, depending on the key format.</param>
-    /// <param name="curve">The elliptic curve to use for key generation and public key derivation.</param>
-    /// <exception cref="ArgumentException">Thrown if privateKey is not 32, 96, or 104 bytes in length.</exception>
-    public KeyPair(byte[] privateKey, ECCurve curve)
-    {
-        if (privateKey.Length != 32 && privateKey.Length != 96 && privateKey.Length != 104)
-            throw new ArgumentException($"Invalid private key length: {privateKey.Length}", nameof(privateKey));
-        PrivateKey = privateKey[^32..];
-        if (privateKey.Length == 32)
+        /// <summary>
+        /// The hash of the public key.
+        /// </summary>
+        public UInt160 PublicKeyHash => PublicKey.EncodePoint(true).ToScriptHash();
+
+        /// <summary>
+        /// Initializes a new instance of the KeyPair class using the specified private key.
+        /// </summary>
+        /// <remarks>This constructor defaults to using the Secp256r1 (NIST P-256) elliptic curve. Use the other
+        /// constructor to specify a different curve if needed.</remarks>
+        /// <param name="privateKey">A byte array containing the private key to use for generating the key pair.</param>
+        public KeyPair(byte[] privateKey) : this(privateKey, ECCurve.Secp256r1)
         {
-            PublicKey = curve.G * privateKey;
         }
-        else
+
+        /// <summary>
+        /// Initializes a new instance of the KeyPair class using the specified private key and elliptic curve.
+        /// </summary>
+        /// <remarks>If privateKey is 32 bytes, the public key is derived from the curve's generator point and the
+        /// private key. For longer privateKey values, the public key is extracted from the provided bytes. The format of
+        /// privateKey must match the expected format for the specified curve.</remarks>
+        /// <param name="privateKey">A byte array containing the private key. Must be 32, 96, or 104 bytes in length, depending on the key format.</param>
+        /// <param name="curve">The elliptic curve to use for key generation and public key derivation.</param>
+        /// <exception cref="ArgumentException">Thrown if privateKey is not 32, 96, or 104 bytes in length.</exception>
+        public KeyPair(byte[] privateKey, ECCurve curve)
         {
-            PublicKey = ECPoint.FromBytes(privateKey, curve);
+            if (privateKey.Length != 32 && privateKey.Length != 96 && privateKey.Length != 104)
+                throw new ArgumentException($"Invalid private key length: {privateKey.Length}", nameof(privateKey));
+            PrivateKey = privateKey[^32..];
+            if (privateKey.Length == 32)
+            {
+                PublicKey = curve.G * privateKey;
+            }
+            else
+            {
+                PublicKey = ECPoint.FromBytes(privateKey, curve);
+            }
         }
-    }
 
-    public bool Equals(KeyPair? other)
-    {
-        if (ReferenceEquals(this, other)) return true;
-        if (other is null) return false;
-        return PublicKey.Equals(other.PublicKey);
-    }
-
-    public override bool Equals(object? obj)
-    {
-        return Equals(obj as KeyPair);
-    }
-
-    /// <summary>
-    /// Exports the private key in WIF format.
-    /// </summary>
-    /// <returns>The private key in WIF format.</returns>
-    public string Export()
-    {
-        Span<byte> data = stackalloc byte[34];
-        data[0] = 0x80;
-        PrivateKey.CopyTo(data[1..]);
-        data[33] = 0x01;
-        string wif = Base58.Base58CheckEncode(data);
-        data.Clear();
-        return wif;
-    }
-
-    /// <summary>
-    /// Exports the private key in NEP-2 format.
-    /// </summary>
-    /// <param name="passphrase">The passphrase of the private key.</param>
-    /// <param name="version">The address version.</param>
-    /// <param name="N">The N field of the <see cref="ScryptParameters"/> to be used.</param>
-    /// <param name="r">The R field of the <see cref="ScryptParameters"/> to be used.</param>
-    /// <param name="p">The P field of the <see cref="ScryptParameters"/> to be used.</param>
-    /// <returns>The private key in NEP-2 format.</returns>
-    public string Export(string passphrase, byte version, int N = 16384, int r = 8, int p = 8)
-    {
-        byte[] passphrasedata = Encoding.UTF8.GetBytes(passphrase);
-        try
+        public bool Equals(KeyPair? other)
         {
-            return Export(passphrasedata, version, N, r, p);
+            if (ReferenceEquals(this, other)) return true;
+            if (other is null) return false;
+            return PublicKey.Equals(other.PublicKey);
         }
-        finally
+
+        public override bool Equals(object? obj)
         {
-            passphrasedata.AsSpan().Clear();
+            return Equals(obj as KeyPair);
         }
-    }
 
-    /// <summary>
-    /// Exports the private key in NEP-2 format.
-    /// </summary>
-    /// <param name="passphrase">The passphrase of the private key.</param>
-    /// <param name="version">The address version.</param>
-    /// <param name="N">The N field of the <see cref="ScryptParameters"/> to be used.</param>
-    /// <param name="r">The R field of the <see cref="ScryptParameters"/> to be used.</param>
-    /// <param name="p">The P field of the <see cref="ScryptParameters"/> to be used.</param>
-    /// <returns>The private key in NEP-2 format.</returns>
-    public string Export(byte[] passphrase, byte version, int N = 16384, int r = 8, int p = 8)
-    {
-        UInt160 script_hash = Contract.CreateSignatureRedeemScript(PublicKey).ToScriptHash();
-        string address = script_hash.ToAddress(version);
-        byte[] addresshash = Encoding.ASCII.GetBytes(address).Sha256().Sha256()[..4];
-        byte[] derivedkey = SCrypt.Generate(passphrase, addresshash, N, r, p, 64);
-        byte[] derivedhalf1 = derivedkey[..32];
-        byte[] derivedhalf2 = derivedkey[32..];
-        byte[] encryptedkey = Encrypt(XOR(PrivateKey, derivedhalf1), derivedhalf2);
-        Span<byte> buffer = stackalloc byte[39];
-        buffer[0] = 0x01;
-        buffer[1] = 0x42;
-        buffer[2] = 0xe0;
-        addresshash.CopyTo(buffer[3..]);
-        encryptedkey.CopyTo(buffer[7..]);
-        return Base58.Base58CheckEncode(buffer);
-    }
+        /// <summary>
+        /// Exports the private key in WIF format.
+        /// </summary>
+        /// <returns>The private key in WIF format.</returns>
+        public string Export()
+        {
+            Span<byte> data = stackalloc byte[34];
+            data[0] = 0x80;
+            PrivateKey.CopyTo(data[1..]);
+            data[33] = 0x01;
+            string wif = Base58.Base58CheckEncode(data);
+            data.Clear();
+            return wif;
+        }
 
-    private static byte[] Encrypt(byte[] data, byte[] key)
-    {
-        using Aes aes = Aes.Create();
-        aes.Key = key;
-        aes.Mode = CipherMode.ECB;
-        aes.Padding = PaddingMode.None;
-        using ICryptoTransform encryptor = aes.CreateEncryptor();
-        return encryptor.TransformFinalBlock(data, 0, data.Length);
-    }
+        /// <summary>
+        /// Exports the private key in NEP-2 format.
+        /// </summary>
+        /// <param name="passphrase">The passphrase of the private key.</param>
+        /// <param name="version">The address version.</param>
+        /// <param name="N">The N field of the <see cref="ScryptParameters"/> to be used.</param>
+        /// <param name="r">The R field of the <see cref="ScryptParameters"/> to be used.</param>
+        /// <param name="p">The P field of the <see cref="ScryptParameters"/> to be used.</param>
+        /// <returns>The private key in NEP-2 format.</returns>
+        public string Export(string passphrase, byte version, int N = 16384, int r = 8, int p = 8)
+        {
+            byte[] passphrasedata = Encoding.UTF8.GetBytes(passphrase);
+            try
+            {
+                return Export(passphrasedata, version, N, r, p);
+            }
+            finally
+            {
+                passphrasedata.AsSpan().Clear();
+            }
+        }
 
-    public override int GetHashCode()
-    {
-        return PublicKey.GetHashCode();
-    }
+        /// <summary>
+        /// Exports the private key in NEP-2 format.
+        /// </summary>
+        /// <param name="passphrase">The passphrase of the private key.</param>
+        /// <param name="version">The address version.</param>
+        /// <param name="N">The N field of the <see cref="ScryptParameters"/> to be used.</param>
+        /// <param name="r">The R field of the <see cref="ScryptParameters"/> to be used.</param>
+        /// <param name="p">The P field of the <see cref="ScryptParameters"/> to be used.</param>
+        /// <returns>The private key in NEP-2 format.</returns>
+        public string Export(byte[] passphrase, byte version, int N = 16384, int r = 8, int p = 8)
+        {
+            UInt160 script_hash = Contract.CreateSignatureRedeemScript(PublicKey).ToScriptHash();
+            string address = script_hash.ToAddress(version);
+            byte[] addresshash = Encoding.ASCII.GetBytes(address).Sha256().Sha256()[..4];
+            byte[] derivedkey = SCrypt.Generate(passphrase, addresshash, N, r, p, 64);
+            byte[] derivedhalf1 = derivedkey[..32];
+            byte[] derivedhalf2 = derivedkey[32..];
+            byte[] encryptedkey = Encrypt(XOR(PrivateKey, derivedhalf1), derivedhalf2);
+            Span<byte> buffer = stackalloc byte[39];
+            buffer[0] = 0x01;
+            buffer[1] = 0x42;
+            buffer[2] = 0xe0;
+            addresshash.CopyTo(buffer[3..]);
+            encryptedkey.CopyTo(buffer[7..]);
+            return Base58.Base58CheckEncode(buffer);
+        }
 
-    public override string ToString()
-    {
-        return PublicKey.ToString();
+        private static byte[] Encrypt(byte[] data, byte[] key)
+        {
+            using Aes aes = Aes.Create();
+            aes.Key = key;
+            aes.Mode = CipherMode.ECB;
+            aes.Padding = PaddingMode.None;
+            using ICryptoTransform encryptor = aes.CreateEncryptor();
+            return encryptor.TransformFinalBlock(data, 0, data.Length);
+        }
+
+        public override int GetHashCode()
+        {
+            return PublicKey.GetHashCode();
+        }
+
+        public override string ToString()
+        {
+            return PublicKey.ToString();
+        }
     }
 }

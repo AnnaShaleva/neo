@@ -13,57 +13,59 @@ using Akka.Actor;
 using Neo.Ledger;
 using Neo.Persistence;
 using Neo.Persistence.Providers;
+using System.Collections.Generic;
 
 #nullable enable
 
-namespace Neo.UnitTests;
-
-public static class TestBlockchain
+namespace Neo.UnitTests
 {
-    private class TestStoreProvider : IStoreProvider
+    public static class TestBlockchain
     {
-        public readonly Dictionary<string, MemoryStore> Stores = [];
-
-        public string Name => "TestProvider";
-
-        public IStore GetStore(string? path)
+        private class TestStoreProvider : IStoreProvider
         {
-            path ??= "";
+            public readonly Dictionary<string, MemoryStore> Stores = [];
 
-            lock (Stores)
+            public string Name => "TestProvider";
+
+            public IStore GetStore(string? path)
             {
-                if (Stores.TryGetValue(path, out var store))
-                    return store;
+                path ??= "";
 
-                return Stores[path] = new MemoryStore();
+                lock (Stores)
+                {
+                    if (Stores.TryGetValue(path, out var store))
+                        return store;
+
+                    return Stores[path] = new MemoryStore();
+                }
             }
         }
-    }
 
-    public class TestNeoSystem(ProtocolSettings settings) : NeoSystem(settings, new TestStoreProvider())
-    {
-        public void ResetStore()
+        public class TestNeoSystem(ProtocolSettings settings) : NeoSystem(settings, new TestStoreProvider())
         {
-            if (StorageProvider is TestStoreProvider testStore)
+            public void ResetStore()
             {
-                foreach (var store in testStore.Stores)
-                    store.Value.Reset();
+                if (StorageProvider is TestStoreProvider testStore)
+                {
+                    foreach (var store in testStore.Stores)
+                        store.Value.Reset();
+                }
+                Blockchain.Ask(new Blockchain.Initialize()).ConfigureAwait(false).GetAwaiter().GetResult();
             }
-            Blockchain.Ask(new Blockchain.Initialize()).ConfigureAwait(false).GetAwaiter().GetResult();
+
+            public StoreCache GetTestSnapshotCache(bool reset = true)
+            {
+                if (reset)
+                    ResetStore();
+                return GetSnapshotCache();
+            }
         }
 
-        public StoreCache GetTestSnapshotCache(bool reset = true)
-        {
-            if (reset)
-                ResetStore();
-            return GetSnapshotCache();
-        }
+        public static readonly UInt160[]? DefaultExtensibleWitnessWhiteList;
+
+        public static TestNeoSystem GetSystem() => new(TestProtocolSettings.Default);
+        public static StoreCache GetTestSnapshotCache() => GetSystem().GetSnapshotCache();
     }
-
-    public static readonly UInt160[]? DefaultExtensibleWitnessWhiteList;
-
-    public static TestNeoSystem GetSystem() => new(TestProtocolSettings.Default);
-    public static StoreCache GetTestSnapshotCache() => GetSystem().GetSnapshotCache();
 }
 
 #nullable disable

@@ -9,44 +9,48 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.Collections;
+using System;
+using System.Collections.Generic;
 
-public static class HashSetExtensions
+namespace Neo.Extensions
 {
-    public static void Remove<T>(this HashSet<T> set, ISet<T> other)
+    public static class HashSetExtensions
     {
-        if (set.Count > other.Count)
+        public static void Remove<T>(this HashSet<T> set, ISet<T> other)
         {
-            set.ExceptWith(other);
+            if (set.Count > other.Count)
+            {
+                set.ExceptWith(other);
+            }
+            else
+            {
+                set.RemoveWhere(other.Contains);
+            }
         }
-        else
-        {
-            set.RemoveWhere(other.Contains);
-        }
-    }
 
-    public static void Remove<T>(this HashSet<T> set, ICollection<T> other)
-        where T : IEquatable<T>
-    {
-        if (set.Count > other.Count)
+        public static void Remove<T>(this HashSet<T> set, ICollection<T> other)
+            where T : IEquatable<T>
         {
-            set.ExceptWith(other);
+            if (set.Count > other.Count)
+            {
+                set.ExceptWith(other);
+            }
+            else
+            {
+                set.RemoveWhere(other.Contains);
+            }
         }
-        else
-        {
-            set.RemoveWhere(other.Contains);
-        }
-    }
 
-    public static void Remove<T, V>(this HashSet<T> set, IReadOnlyDictionary<T, V> other)
-    {
-        if (set.Count > other.Count)
+        public static void Remove<T, V>(this HashSet<T> set, IReadOnlyDictionary<T, V> other)
         {
-            set.ExceptWith(other.Keys);
-        }
-        else
-        {
-            set.RemoveWhere(other.ContainsKey);
+            if (set.Count > other.Count)
+            {
+                set.ExceptWith(other.Keys);
+            }
+            else
+            {
+                set.RemoveWhere(other.ContainsKey);
+            }
         }
     }
 }

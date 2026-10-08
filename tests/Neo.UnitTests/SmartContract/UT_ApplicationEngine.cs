@@ -9,180 +9,295 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-using Neo.Extensions.VM;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Neo.Extensions;
+using Neo.Network.P2P.Payloads;
 using Neo.SmartContract;
 using Neo.SmartContract.Manifest;
 using Neo.UnitTests.Extensions;
 using Neo.VM;
+using System;
+using System.Collections.Immutable;
+using System.Linq;
 using Array = Neo.VM.Types.Array;
 using Boolean = Neo.VM.Types.Boolean;
 
-namespace Neo.UnitTests.SmartContract;
-
-[TestClass]
-public partial class UT_ApplicationEngine
+namespace Neo.UnitTests.SmartContract
 {
-    private string? eventName = null;
-
-    [TestMethod]
-    public void TestNotify()
+    [TestClass]
+    public partial class UT_ApplicationEngine
     {
-        var snapshotCache = TestBlockchain.GetTestSnapshotCache();
-        using var engine = ApplicationEngine.Create(TriggerType.Application, null, snapshotCache, settings: TestProtocolSettings.Default);
-        engine.LoadScript(System.Array.Empty<byte>());
-        engine.Notify += Test_Notify1;
-        const string notifyEvent = "TestEvent";
+        private string eventName = null;
 
-        engine.SendNotification(UInt160.Zero, notifyEvent, new Array());
-        Assert.AreEqual(notifyEvent, eventName);
-
-        engine.Notify += Test_Notify2;
-        engine.SendNotification(UInt160.Zero, notifyEvent, new Array());
-        Assert.IsNull(eventName);
-
-        eventName = notifyEvent;
-        engine.Notify -= Test_Notify1;
-        engine.SendNotification(UInt160.Zero, notifyEvent, new Array());
-        Assert.IsNull(eventName);
-
-        engine.Notify -= Test_Notify2;
-        engine.SendNotification(UInt160.Zero, notifyEvent, new Array());
-        Assert.IsNull(eventName);
-    }
-
-    private void Test_Notify1(object sender, NotifyEventArgs e)
-    {
-        eventName = e.EventName;
-    }
-
-    private void Test_Notify2(object sender, NotifyEventArgs e)
-    {
-        eventName = null;
-    }
-
-    [TestMethod]
-    public void TestCreateDummyBlock()
-    {
-        var system = TestBlockchain.GetSystem();
-        var snapshotCache = system.GetTestSnapshotCache();
-        byte[] SyscallSystemRuntimeCheckWitnessHash = [0x68, 0xf8, 0x27, 0xec, 0x8c];
-        ApplicationEngine engine = ApplicationEngine.Run(SyscallSystemRuntimeCheckWitnessHash, snapshotCache, settings: TestProtocolSettings.Default);
-        Assert.AreEqual(0u, engine.PersistingBlock!.Version);
-        Assert.AreEqual(system.GenesisBlock.Hash, engine.PersistingBlock.PrevHash);
-        Assert.AreEqual(new UInt256(), engine.PersistingBlock.MerkleRoot);
-    }
-
-    [TestMethod]
-    public void TestSystem_Contract_Call_Permissions()
-    {
-        UInt160 scriptHash;
-        var snapshotCache = TestBlockchain.GetTestSnapshotCache();
-
-        // Setup: put a simple contract to the storage.
-        using (var script = new ScriptBuilder())
+        [TestMethod]
+        public void TestNotify()
         {
-            // Push True on stack and return.
-            script.EmitPush(true);
-            script.Emit(OpCode.RET);
+            var snapshotCache = TestBlockchain.GetTestSnapshotCache();
+            using var engine = ApplicationEngine.Create(TriggerType.Application, null, snapshotCache, settings: TestProtocolSettings.Default);
+            engine.LoadScript(System.Array.Empty<byte>());
+            engine.Notify += Test_Notify1;
+            const string notifyEvent = "TestEvent";
 
-            // Mock contract and put it to the Managemant's storage.
-            scriptHash = script.ToArray().ToScriptHash();
+            engine.SendNotification(UInt160.Zero, notifyEvent, new Array());
+            Assert.AreEqual(notifyEvent, eventName);
 
-            snapshotCache.DeleteContract(scriptHash);
-            var contract = TestUtils.GetContract(script.ToArray(), TestUtils.CreateManifest("test", ContractParameterType.Any));
-            contract.Manifest.Abi.Methods = [
-                new ContractMethodDescriptor { Name = "disallowed", Parameters = [] },
-                new ContractMethodDescriptor { Name = "test", Parameters = [] }
-            ];
-            snapshotCache.AddContract(scriptHash, contract);
+            engine.Notify += Test_Notify2;
+            engine.SendNotification(UInt160.Zero, notifyEvent, new Array());
+            Assert.IsNull(eventName);
+
+            eventName = notifyEvent;
+            engine.Notify -= Test_Notify1;
+            engine.SendNotification(UInt160.Zero, notifyEvent, new Array());
+            Assert.IsNull(eventName);
+
+            engine.Notify -= Test_Notify2;
+            engine.SendNotification(UInt160.Zero, notifyEvent, new Array());
+            Assert.IsNull(eventName);
         }
 
-        // Disallowed method call.
-        using (var engine = ApplicationEngine.Create(TriggerType.Application, null, snapshotCache, null, ProtocolSettings.Default))
-        using (var script = new ScriptBuilder())
+        private void Test_Notify1(object sender, NotifyEventArgs e)
         {
-            // Build call script calling disallowed method.
-            script.EmitDynamicCall(scriptHash, "disallowed");
-
-            // Mock executing state to be a contract-based.
-            engine.LoadScript(script.ToArray());
-            engine.CurrentContext!.GetState<ExecutionContextState>().Contract = new()
-            {
-                Hash = UInt160.Zero,
-                Nef = null!,
-                Manifest = new()
-                {
-                    Name = "",
-                    Groups = [],
-                    SupportedStandards = [],
-                    Abi = new()
-                    {
-                        Methods = [],
-                        Events = []
-                    },
-                    Permissions = [
-                        new ContractPermission
-                        {
-                            Contract = ContractPermissionDescriptor.Create(scriptHash),
-                            Methods = WildcardContainer<string>.Create(["test"]) // allowed to call only "test" method of the target contract.
-                        }
-                    ],
-                    Trusts = WildcardContainer<ContractPermissionDescriptor>.CreateWildcard()
-                }
-            };
-            var currentScriptHash = engine.EntryScriptHash;
-
-            Assert.AreEqual("", engine.GetEngineStackInfoOnFault());
-            Assert.AreEqual(VMState.FAULT, engine.Execute());
-            Assert.Contains($"Cannot Call Method disallowed Of Contract {scriptHash}", engine.FaultException!.ToString());
-            string traceback = engine.GetEngineStackInfoOnFault();
-            Assert.Contains($"Cannot Call Method disallowed Of Contract {scriptHash}", traceback);
-            Assert.Contains("CurrentScriptHash", traceback);
-            Assert.Contains("EntryScriptHash", traceback);
-            Assert.Contains("InstructionPointer", traceback);
-            Assert.Contains("OpCode SYSCALL, Script Length=", traceback);
+            eventName = e.EventName;
         }
 
-        // Allowed method call.
-        using (var engine = ApplicationEngine.Create(TriggerType.Application, null, snapshotCache, null, ProtocolSettings.Default))
-        using (var script = new ScriptBuilder())
+        private void Test_Notify2(object sender, NotifyEventArgs e)
         {
-            // Build call script.
-            script.EmitDynamicCall(scriptHash, "test");
+            eventName = null;
+        }
 
-            // Mock executing state to be a contract-based.
-            engine.LoadScript(script.ToArray());
-            engine.CurrentContext!.GetState<ExecutionContextState>().Contract = new()
+        [TestMethod]
+        public void TestCreateDummyBlock()
+        {
+            var system = TestBlockchain.GetSystem();
+            var snapshotCache = system.GetTestSnapshotCache();
+            byte[] SyscallSystemRuntimeCheckWitnessHash = [0x68, 0xf8, 0x27, 0xec, 0x8c];
+            ApplicationEngine engine = ApplicationEngine.Run(SyscallSystemRuntimeCheckWitnessHash, snapshotCache, settings: TestProtocolSettings.Default);
+            Assert.AreEqual(0u, engine.PersistingBlock.Version);
+            Assert.AreEqual(system.GenesisBlock.Hash, engine.PersistingBlock.PrevHash);
+            Assert.AreEqual(new UInt256(), engine.PersistingBlock.MerkleRoot);
+        }
+
+        [TestMethod]
+        public void TestCheckingHardfork()
+        {
+            var allHardforks = Enum.GetValues(typeof(Hardfork)).Cast<Hardfork>().ToList();
+
+            var builder = ImmutableDictionary.CreateBuilder<Hardfork, uint>();
+            builder.Add(Hardfork.HF_Aspidochelone, 0);
+            builder.Add(Hardfork.HF_Basilisk, 1);
+
+            var setting = builder.ToImmutable();
+
+            // Check for continuity in configured hardforks
+            var sortedHardforks = setting.Keys
+                .OrderBy(h => allHardforks.IndexOf(h))
+                .ToList();
+
+            for (int i = 0; i < sortedHardforks.Count - 1; i++)
             {
-                Hash = UInt160.Zero,
-                Nef = null!,
-                Manifest = new()
-                {
-                    Name = "",
-                    Groups = [],
-                    SupportedStandards = [],
-                    Abi = new()
-                    {
-                        Methods = [],
-                        Events = []
-                    },
-                    Permissions = [
-                        new ContractPermission
-                        {
-                            Contract = ContractPermissionDescriptor.Create(scriptHash),
-                            Methods = WildcardContainer<string>.Create(["test"]) // allowed to call only "test" method of the target contract.
-                        }
-                    ],
-                    Trusts = WildcardContainer<ContractPermissionDescriptor>.CreateWildcard()
-                }
-            };
-            var currentScriptHash = engine.EntryScriptHash;
+                int currentIndex = allHardforks.IndexOf(sortedHardforks[i]);
+                int nextIndex = allHardforks.IndexOf(sortedHardforks[i + 1]);
 
+                // If they aren't consecutive, return false.
+                var inc = nextIndex - currentIndex;
+                Assert.AreEqual(1, inc);
+            }
+
+            // Check that block numbers are not higher in earlier hardforks than in later ones
+            for (int i = 0; i < sortedHardforks.Count - 1; i++)
+            {
+                Assert.IsLessThanOrEqualTo(setting[sortedHardforks[i + 1]], setting[sortedHardforks[i]]);
+            }
+        }
+
+        [TestMethod]
+        public void TestSystem_Contract_Call_Permissions()
+        {
+            UInt160 scriptHash;
+            var snapshotCache = TestBlockchain.GetTestSnapshotCache();
+
+            // Setup: put a simple contract to the storage.
+            using (var script = new ScriptBuilder())
+            {
+                // Push True on stack and return.
+                script.EmitPush(true);
+                script.Emit(OpCode.RET);
+
+                // Mock contract and put it to the Managemant's storage.
+                scriptHash = script.ToArray().ToScriptHash();
+
+                snapshotCache.DeleteContract(scriptHash);
+                var contract = TestUtils.GetContract(script.ToArray(), TestUtils.CreateManifest("test", ContractParameterType.Any));
+                contract.Manifest.Abi.Methods = [
+                    new ContractMethodDescriptor { Name = "disallowed", Parameters = [] },
+                    new ContractMethodDescriptor { Name = "test", Parameters = [] }
+                ];
+                snapshotCache.AddContract(scriptHash, contract);
+            }
+
+            // Disallowed method call.
+            using (var engine = ApplicationEngine.Create(TriggerType.Application, null, snapshotCache, null, ProtocolSettings.Default))
+            using (var script = new ScriptBuilder())
+            {
+                // Build call script calling disallowed method.
+                script.EmitDynamicCall(scriptHash, "disallowed");
+
+                // Mock executing state to be a contract-based.
+                engine.LoadScript(script.ToArray());
+                engine.CurrentContext.GetState<ExecutionContextState>().Contract = new()
+                {
+                    Hash = UInt160.Zero,
+                    Nef = null!,
+                    Manifest = new()
+                    {
+                        Name = "",
+                        Groups = [],
+                        SupportedStandards = [],
+                        Abi = new()
+                        {
+                            Methods = [],
+                            Events = []
+                        },
+                        Permissions = [
+                            new ContractPermission
+                            {
+                                Contract = ContractPermissionDescriptor.Create(scriptHash),
+                                Methods = WildcardContainer<string>.Create(["test"]) // allowed to call only "test" method of the target contract.
+                            }
+                        ],
+                        Trusts = WildcardContainer<ContractPermissionDescriptor>.CreateWildcard()
+                    }
+                };
+                var currentScriptHash = engine.EntryScriptHash;
+
+                Assert.AreEqual("", engine.GetEngineStackInfoOnFault());
+                Assert.AreEqual(VMState.FAULT, engine.Execute());
+                Assert.Contains($"Cannot Call Method disallowed Of Contract {scriptHash.ToString()}", engine.FaultException.ToString());
+                string traceback = engine.GetEngineStackInfoOnFault();
+                Assert.Contains($"Cannot Call Method disallowed Of Contract {scriptHash.ToString()}", traceback);
+                Assert.Contains("CurrentScriptHash", traceback);
+                Assert.Contains("EntryScriptHash", traceback);
+                Assert.Contains("InstructionPointer", traceback);
+                Assert.Contains("OpCode SYSCALL, Script Length=", traceback);
+            }
+
+            // Allowed method call.
+            using (var engine = ApplicationEngine.Create(TriggerType.Application, null, snapshotCache, null, ProtocolSettings.Default))
+            using (var script = new ScriptBuilder())
+            {
+                // Build call script.
+                script.EmitDynamicCall(scriptHash, "test");
+
+                // Mock executing state to be a contract-based.
+                engine.LoadScript(script.ToArray());
+                engine.CurrentContext.GetState<ExecutionContextState>().Contract = new()
+                {
+                    Hash = UInt160.Zero,
+                    Nef = null!,
+                    Manifest = new()
+                    {
+                        Name = "",
+                        Groups = [],
+                        SupportedStandards = [],
+                        Abi = new()
+                        {
+                            Methods = [],
+                            Events = []
+                        },
+                        Permissions = [
+                            new ContractPermission
+                            {
+                                Contract = ContractPermissionDescriptor.Create(scriptHash),
+                                Methods = WildcardContainer<string>.Create(["test"]) // allowed to call only "test" method of the target contract.
+                            }
+                        ],
+                        Trusts = WildcardContainer<ContractPermissionDescriptor>.CreateWildcard()
+                    }
+                };
+                var currentScriptHash = engine.EntryScriptHash;
+
+                Assert.AreEqual(VMState.HALT, engine.Execute());
+                Assert.HasCount(1, engine.ResultStack);
+                Assert.IsInstanceOfType(engine.ResultStack.Peek(), typeof(Boolean));
+                var res = (Boolean)engine.ResultStack.Pop();
+                Assert.IsTrue(res.GetBoolean());
+            }
+        }
+
+        private static ApplicationEngine CreateHuyaoGatingEngine(bool huyaoEnabled, byte[] script)
+        {
+            var persistingBlock = new Block
+            {
+                Header = new Header
+                {
+                    PrevHash = UInt256.Zero,
+                    MerkleRoot = null!,
+                    Index = 10,
+                    NextConsensus = null!,
+                    Witness = null!
+                },
+                Transactions = null!
+            };
+
+            var settings = TestProtocolSettings.Default with
+            {
+                Hardforks = TestProtocolSettings.Default.Hardforks.SetItem(
+                    Hardfork.HF_Huyao, huyaoEnabled ? 0u : uint.MaxValue)
+            };
+
+            var snapshotCache = TestBlockchain.GetTestSnapshotCache();
+            var engine = ApplicationEngine.Create(TriggerType.Application, null, snapshotCache, persistingBlock, settings: settings);
+            engine.LoadScript(script);
+            return engine;
+        }
+
+        [TestMethod]
+        public void TestHuyaoGating_Disabled_UsesLegacyStaticPricing()
+        {
+            using var script = new ScriptBuilder();
+            script.Emit(OpCode.PUSH1);
+
+            using var engine = CreateHuyaoGatingEngine(huyaoEnabled: false, script.ToArray());
             Assert.AreEqual(VMState.HALT, engine.Execute());
-            Assert.HasCount(1, engine.ResultStack);
-            Assert.IsInstanceOfType<Boolean>(engine.ResultStack.Peek());
-            var res = (Boolean)engine.ResultStack.Pop();
-            Assert.IsTrue(res.GetBoolean());
+
+            var expectedFemtoGas = engine.ExecFeePicoFactor * ApplicationEngine.OpCodePriceTable[(byte)OpCode.PUSH1] * ApplicationEngine.OpcodePriceMultiplier;
+            var expectedFee = (long)expectedFemtoGas.DivideCeiling(ApplicationEngine.FeeFactor * ApplicationEngine.OpcodePriceMultiplier);
+            Assert.AreEqual(expectedFee, engine.FeeConsumed);
+        }
+
+        [TestMethod]
+        public void TestHuyaoGating_Enabled_UsesV1DynamicPricing()
+        {
+            using var script = new ScriptBuilder();
+            script.Emit(OpCode.PUSH1);
+
+            using var engine = CreateHuyaoGatingEngine(huyaoEnabled: true, script.ToArray());
+            Assert.AreEqual(VMState.HALT, engine.Execute());
+
+            // Dynamic (V1) path: AddFemtoGas(OpcodeV1(execFeeFactor, opcode, stats)) directly, no extra multiplier.
+            var expectedFemtoGas = engine.OpcodeV1((long)engine.ExecFeePicoFactor, OpCode.PUSH1, new RunStats());
+            var expectedFee = (long)((System.Numerics.BigInteger)expectedFemtoGas).DivideCeiling(ApplicationEngine.FeeFactor * ApplicationEngine.OpcodePriceMultiplier);
+            Assert.AreEqual(expectedFee, engine.FeeConsumed);
+        }
+
+        [TestMethod]
+        public void TestHuyaoGating_Enabled_SyntheticRetIsFree()
+        {
+            using var scriptWithoutRet = new ScriptBuilder();
+            scriptWithoutRet.Emit(OpCode.PUSH1);
+
+            using var scriptWithRet = new ScriptBuilder();
+            scriptWithRet.Emit(OpCode.PUSH1);
+            scriptWithRet.Emit(OpCode.RET);
+
+            using var engineWithoutRet = CreateHuyaoGatingEngine(huyaoEnabled: true, scriptWithoutRet.ToArray());
+            Assert.AreEqual(VMState.HALT, engineWithoutRet.Execute());
+
+            using var engineWithRet = CreateHuyaoGatingEngine(huyaoEnabled: true, scriptWithRet.ToArray());
+            Assert.AreEqual(VMState.HALT, engineWithRet.Execute());
+
+            // The synthetic RET the VM inserts at script end must not be charged, unlike an explicit RET.
+            Assert.IsLessThan(engineWithRet.FeeConsumed, engineWithoutRet.FeeConsumed);
         }
     }
 }

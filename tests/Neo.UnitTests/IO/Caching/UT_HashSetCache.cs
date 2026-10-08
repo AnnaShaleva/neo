@@ -9,146 +9,150 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.IO.Caching;
+using System;
 using System.Collections;
+using System.Linq;
 
-namespace Neo.UnitTests.IO.Caching;
-
-[TestClass]
-public class UT_HashSetCache
+namespace Neo.UnitTests.IO.Caching
 {
-    [TestMethod]
-    public void TestHashSetCache()
+    [TestClass]
+    public class UT_HashSetCache
     {
-        var bucket = new HashSetCache<int>(100);
-        for (var i = 1; i <= 100; i++)
+        [TestMethod]
+        public void TestHashSetCache()
         {
-            Assert.IsTrue(bucket.TryAdd(i));
-            Assert.IsFalse(bucket.TryAdd(i));
-        }
-        Assert.HasCount(100, bucket);
+            var bucket = new HashSetCache<int>(100);
+            for (var i = 1; i <= 100; i++)
+            {
+                Assert.IsTrue(bucket.TryAdd(i));
+                Assert.IsFalse(bucket.TryAdd(i));
+            }
+            Assert.HasCount(100, bucket);
 
-        var sum = 0;
-        foreach (var ele in bucket)
+            var sum = 0;
+            foreach (var ele in bucket)
+            {
+                sum += ele;
+            }
+            Assert.AreEqual(5050, sum);
+
+            bucket.TryAdd(101);
+            Assert.HasCount(100, bucket);
+
+            var items = new int[10];
+            var value = 11;
+            for (var i = 0; i < 10; i++)
+            {
+                items[i] = value;
+                value += 2;
+            }
+            bucket.ExceptWith(items);
+            Assert.HasCount(90, bucket);
+
+            Assert.DoesNotContain(13, bucket);
+            Assert.Contains(50, bucket);
+        }
+
+        [TestMethod]
+        public void TestConstructor()
         {
-            sum += ele;
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new HashSetCache<UInt256>(-1));
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new HashSetCache<UInt256>(-1));
         }
-        Assert.AreEqual(5050, sum);
 
-        bucket.TryAdd(101);
-        Assert.HasCount(100, bucket);
-
-        var items = new int[10];
-        var value = 11;
-        for (var i = 0; i < 10; i++)
+        [TestMethod]
+        public void TestAdd()
         {
-            items[i] = value;
-            value += 2;
+            var key1 = Enumerable.Repeat((byte)1, 32).ToArray();
+            var a = new UInt256(key1);
+
+            var key2 = Enumerable.Repeat((byte)1, 31).Append((byte)2).ToArray();
+            var b = new UInt256(key2);
+
+            var set = new HashSetCache<UInt256>(1);
+            Assert.IsTrue(set.TryAdd(a));
+            Assert.IsTrue(set.TryAdd(b));
+            Assert.AreSequenceEqual(set.ToArray(), new UInt256[] { b });
         }
-        bucket.ExceptWith(items);
-        Assert.HasCount(90, bucket);
 
-        Assert.DoesNotContain(13, bucket);
-        Assert.Contains(50, bucket);
-    }
+        [TestMethod]
+        public void TestCopyTo()
+        {
+            var key1 = Enumerable.Repeat((byte)1, 32).ToArray();
+            var a = new UInt256(key1);
 
-    [TestMethod]
-    public void TestConstructor()
-    {
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new HashSetCache<UInt256>(-1));
-    }
+            var key2 = Enumerable.Repeat((byte)1, 31).Append((byte)2).ToArray();
+            var b = new UInt256(key2);
 
-    [TestMethod]
-    public void TestAdd()
-    {
-        var key1 = Enumerable.Repeat((byte)1, 32).ToArray();
-        var a = new UInt256(key1);
+            var set = new HashSetCache<UInt256>(1);
+            Assert.IsTrue(set.TryAdd(a));
+            Assert.IsTrue(set.TryAdd(b));
 
-        var key2 = Enumerable.Repeat((byte)1, 31).Append((byte)2).ToArray();
-        var b = new UInt256(key2);
+            var array = new UInt256[1];
+            set.CopyTo(array, 0);
 
-        var set = new HashSetCache<UInt256>(1);
-        Assert.IsTrue(set.TryAdd(a));
-        Assert.IsTrue(set.TryAdd(b));
-        CollectionAssert.AreEqual(set.ToArray(), new UInt256[] { b });
-    }
+            Assert.AreSequenceEqual(array, new UInt256[] { b });
+        }
 
-    [TestMethod]
-    public void TestCopyTo()
-    {
-        var key1 = Enumerable.Repeat((byte)1, 32).ToArray();
-        var a = new UInt256(key1);
+        [TestMethod]
+        public void TestGetEnumerator()
+        {
+            var key1 = Enumerable.Repeat((byte)1, 32).ToArray();
+            var a = new UInt256(key1);
 
-        var key2 = Enumerable.Repeat((byte)1, 31).Append((byte)2).ToArray();
-        var b = new UInt256(key2);
+            var key2 = Enumerable.Repeat((byte)1, 31).Append((byte)2).ToArray();
+            var b = new UInt256(key2);
 
-        var set = new HashSetCache<UInt256>(1);
-        Assert.IsTrue(set.TryAdd(a));
-        Assert.IsTrue(set.TryAdd(b));
+            var set = new HashSetCache<UInt256>(1);
+            set.TryAdd(a);
+            set.Add(b);
+            IEnumerable ie = set;
+            Assert.IsNotNull(ie.GetEnumerator());
+        }
 
-        var array = new UInt256[1];
-        set.CopyTo(array, 0);
+        [TestMethod]
+        public void TestExceptWith()
+        {
+            var key1 = Enumerable.Repeat((byte)1, 32).ToArray();
+            var a = new UInt256(key1);
 
-        CollectionAssert.AreEqual(array, new UInt256[] { b });
-    }
+            var key2 = Enumerable.Repeat((byte)1, 31).Append((byte)2).ToArray();
+            var b = new UInt256(key2);
 
-    [TestMethod]
-    public void TestGetEnumerator()
-    {
-        var key1 = Enumerable.Repeat((byte)1, 32).ToArray();
-        var a = new UInt256(key1);
+            var key3 = Enumerable.Repeat((byte)1, 31).Append((byte)3).ToArray();
+            var c = new UInt256(key3);
 
-        var key2 = Enumerable.Repeat((byte)1, 31).Append((byte)2).ToArray();
-        var b = new UInt256(key2);
+            var set = new HashSetCache<UInt256>(10);
+            set.TryAdd(a);
+            set.TryAdd(b);
+            set.TryAdd(c);
+            set.ExceptWith([b, c]);
+            Assert.AreSequenceEqual(set.ToArray(), new UInt256[] { a });
 
-        var set = new HashSetCache<UInt256>(1);
-        set.TryAdd(a);
-        set.Add(b);
-        IEnumerable ie = set;
-        Assert.IsNotNull(ie.GetEnumerator());
-    }
+            set.Remove(a);
+            Assert.AreSequenceEqual(set.ToArray(), Array.Empty<UInt256>());
 
-    [TestMethod]
-    public void TestExceptWith()
-    {
-        var key1 = Enumerable.Repeat((byte)1, 32).ToArray();
-        var a = new UInt256(key1);
+            set = new HashSetCache<UInt256>(10);
+            set.TryAdd(a);
+            set.TryAdd(b);
+            set.TryAdd(c);
+            set.ExceptWith([a]);
+            Assert.AreSequenceEqual(set.ToArray(), new UInt256[] { b, c });
 
-        var key2 = Enumerable.Repeat((byte)1, 31).Append((byte)2).ToArray();
-        var b = new UInt256(key2);
+            set = new HashSetCache<UInt256>(10);
+            set.TryAdd(a);
+            set.TryAdd(b);
+            set.TryAdd(c);
+            set.ExceptWith([c]);
+            Assert.AreSequenceEqual(set.ToArray(), new UInt256[] { a, b });
+        }
 
-        var key3 = Enumerable.Repeat((byte)1, 31).Append((byte)3).ToArray();
-        var c = new UInt256(key3);
-
-        var set = new HashSetCache<UInt256>(10);
-        set.TryAdd(a);
-        set.TryAdd(b);
-        set.TryAdd(c);
-        set.ExceptWith([b, c]);
-        CollectionAssert.AreEqual(set.ToArray(), new UInt256[] { a });
-
-        set.Remove(a);
-        CollectionAssert.AreEqual(set.ToArray(), Array.Empty<UInt256>());
-
-        set = new HashSetCache<UInt256>(10);
-        set.TryAdd(a);
-        set.TryAdd(b);
-        set.TryAdd(c);
-        set.ExceptWith([a]);
-        CollectionAssert.AreEqual(set.ToArray(), new UInt256[] { b, c });
-
-        set = new HashSetCache<UInt256>(10);
-        set.TryAdd(a);
-        set.TryAdd(b);
-        set.TryAdd(c);
-        set.ExceptWith([c]);
-        CollectionAssert.AreEqual(set.ToArray(), new UInt256[] { a, b });
-    }
-
-    [TestMethod]
-    public void TestPrune()
-    {
-        var cache = new HashSetCache<int>(100, () => DateTime.UtcNow)
+        [TestMethod]
+        public void TestPrune()
+        {
+            var cache = new HashSetCache<int>(100, () => DateTime.UtcNow)
             {
                 // Add elements at different timestamps
                 1,
@@ -158,69 +162,70 @@ public class UT_HashSetCache
                 5
             };
 
-        // Wait to create a time difference
-        Thread.Sleep(100);
-        var pruneTime = DateTime.UtcNow;
-        Thread.Sleep(100);
+            // Wait to create a time difference
+            System.Threading.Thread.Sleep(100);
+            var pruneTime = DateTime.UtcNow;
+            System.Threading.Thread.Sleep(100);
 
-        // Add more elements after prune time
-        cache.Add(6);
-        cache.Add(7);
-        cache.Add(8);
+            // Add more elements after prune time
+            cache.Add(6);
+            cache.Add(7);
+            cache.Add(8);
 
-        Assert.HasCount(8, cache);
+            Assert.HasCount(8, cache);
 
-        // Prune old elements (first 5)
-        cache.Prune(pruneTime);
+            // Prune old elements (first 5)
+            cache.Prune(pruneTime);
 
-        // Verify only elements added after prune time remain
-        Assert.HasCount(3, cache);
-        Assert.Contains(6, cache);
-        Assert.Contains(7, cache);
-        Assert.Contains(8, cache);
-        Assert.DoesNotContain(1, cache);
-        Assert.DoesNotContain(2, cache);
-        Assert.DoesNotContain(3, cache);
-        Assert.DoesNotContain(4, cache);
-        Assert.DoesNotContain(5, cache);
-    }
+            // Verify only elements added after prune time remain
+            Assert.HasCount(3, cache);
+            Assert.Contains(6, cache);
+            Assert.Contains(7, cache);
+            Assert.Contains(8, cache);
+            Assert.DoesNotContain(1, cache);
+            Assert.DoesNotContain(2, cache);
+            Assert.DoesNotContain(3, cache);
+            Assert.DoesNotContain(4, cache);
+            Assert.DoesNotContain(5, cache);
+        }
 
-    [TestMethod]
-    public void TestPruneAll()
-    {
-        var cache = new HashSetCache<int>(100, () => DateTime.UtcNow)
+        [TestMethod]
+        public void TestPruneAll()
+        {
+            var cache = new HashSetCache<int>(100, () => DateTime.UtcNow)
             {
                 1,
                 2,
                 3
             };
 
-        Assert.HasCount(3, cache);
+            Assert.HasCount(3, cache);
 
-        // Prune all elements (future date)
-        cache.Prune(DateTime.UtcNow.AddHours(1));
+            // Prune all elements (future date)
+            cache.Prune(DateTime.UtcNow.AddHours(1));
 
-        Assert.IsEmpty(cache);
-    }
+            Assert.IsEmpty(cache);
+        }
 
-    [TestMethod]
-    public void TestPruneNone()
-    {
-        var cache = new HashSetCache<int>(100, () => DateTime.UtcNow)
+        [TestMethod]
+        public void TestPruneNone()
+        {
+            var cache = new HashSetCache<int>(100, () => DateTime.UtcNow)
             {
                 1,
                 2,
                 3
             };
 
-        Assert.HasCount(3, cache);
+            Assert.HasCount(3, cache);
 
-        // Prune nothing (past date)
-        cache.Prune(DateTime.UtcNow.AddHours(-1));
+            // Prune nothing (past date)
+            cache.Prune(DateTime.UtcNow.AddHours(-1));
 
-        Assert.HasCount(3, cache);
-        Assert.Contains(1, cache);
-        Assert.Contains(2, cache);
-        Assert.Contains(3, cache);
+            Assert.HasCount(3, cache);
+            Assert.Contains(1, cache);
+            Assert.Contains(2, cache);
+            Assert.Contains(3, cache);
+        }
     }
 }

@@ -11,41 +11,42 @@
 
 using BenchmarkDotNet.Attributes;
 
-namespace Neo.Json.Benchmarks;
-
-[MemoryDiagnoser]
-[CsvMeasurementsExporter]
-[MarkdownExporter]
-public class Benchmark_JObject
+namespace Neo.Json.Benchmarks
 {
-    private JObject _alice = new();
-
-    [GlobalSetup]
-    public void Setup()
+    [MemoryDiagnoser]
+    [CsvMeasurementsExporter]
+    [MarkdownExporter]
+    public class Benchmark_JObject
     {
-        _alice = new JObject
+        private JObject _alice = new();
+
+        [GlobalSetup]
+        public void Setup()
         {
-            ["name"] = "Alice",
-            ["age"] = 30
-        };
-    }
+            _alice = new JObject
+            {
+                ["name"] = "Alice",
+                ["age"] = 30
+            };
+        }
 
-    [Benchmark]
-    public void TestAddProperty()
-    {
-        _alice["city"] = "New York";
-    }
+        [Benchmark]
+        public void TestAddProperty()
+        {
+            _alice["city"] = "New York";
+        }
 
-    [Benchmark]
-    public void TestClone()
-    {
-        _ = _alice.Clone();
-    }
+        [Benchmark]
+        public void TestClone()
+        {
+            _ = _alice.Clone();
+        }
 
-    [Benchmark]
-    public static void TestParse()
-    {
-        JToken.Parse("{\"name\":\"John\", \"age\":25}");
+        [Benchmark]
+        public void TestParse()
+        {
+            JObject.Parse("{\"name\":\"John\", \"age\":25}");
+        }
     }
 }
 

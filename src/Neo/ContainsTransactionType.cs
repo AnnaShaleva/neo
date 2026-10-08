@@ -9,11 +9,12 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo;
-
-public enum ContainsTransactionType
+namespace Neo
 {
-    NotExist,
-    ExistsInPool,
-    ExistsInLedger
+    public enum ContainsTransactionType
+    {
+        NotExist,
+        ExistsInPool,
+        ExistsInLedger
+    }
 }

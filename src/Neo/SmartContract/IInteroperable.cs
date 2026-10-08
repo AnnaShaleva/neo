@@ -11,36 +11,37 @@
 
 using Neo.VM;
 using Neo.VM.Types;
+using System;
 
-namespace Neo.SmartContract;
-
-/// <summary>
-/// Represents the object that can be converted to and from <see cref="StackItem"/>.
-/// </summary>
-public interface IInteroperable
+namespace Neo.SmartContract
 {
     /// <summary>
-    /// Convert a <see cref="StackItem"/> to the current object.
+    /// Represents the object that can be converted to and from <see cref="StackItem"/>.
     /// </summary>
-    /// <param name="stackItem">The <see cref="StackItem"/> to convert.</param>
-    void FromStackItem(StackItem stackItem);
-
-    /// <summary>
-    /// Convert the current object to a <see cref="StackItem"/>.
-    /// </summary>
-    /// <param name="referenceCounter">The <see cref="IReferenceCounter"/> used by the <see cref="StackItem"/>.</param>
-    /// <returns>The converted <see cref="StackItem"/>.</returns>
-    StackItem ToStackItem(IReferenceCounter? referenceCounter);
-
-    public IInteroperable Clone()
+    public interface IInteroperable
     {
-        var result = (IInteroperable)Activator.CreateInstance(GetType())!;
-        result.FromStackItem(ToStackItem(null));
-        return result;
-    }
+        /// <summary>
+        /// Convert a <see cref="StackItem"/> to the current object.
+        /// </summary>
+        /// <param name="stackItem">The <see cref="StackItem"/> to convert.</param>
+        void FromStackItem(StackItem stackItem);
 
-    public void FromReplica(IInteroperable replica)
-    {
-        FromStackItem(replica.ToStackItem(null));
+        /// <summary>
+        /// Convert the current object to a <see cref="StackItem"/>.
+        /// </summary>
+        /// <returns>The converted <see cref="StackItem"/>.</returns>
+        StackItem ToStackItem();
+
+        public IInteroperable Clone()
+        {
+            var result = (IInteroperable)Activator.CreateInstance(GetType())!;
+            result.FromStackItem(ToStackItem());
+            return result;
+        }
+
+        public void FromReplica(IInteroperable replica)
+        {
+            FromStackItem(replica.ToStackItem());
+        }
     }
 }

@@ -9,22 +9,26 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo;
+using System;
+using System.Collections.Generic;
 
-public class ByteArrayEqualityComparer : IEqualityComparer<byte[]>
+namespace Neo.Extensions
 {
-    public static readonly ByteArrayEqualityComparer Default = new();
-
-    public bool Equals(byte[]? x, byte[]? y)
+    public class ByteArrayEqualityComparer : IEqualityComparer<byte[]>
     {
-        if (ReferenceEquals(x, y)) return true;
-        if (x is null || y is null || x.Length != y.Length) return false;
+        public static readonly ByteArrayEqualityComparer Default = new();
 
-        return x.AsSpan().SequenceEqual(y.AsSpan());
-    }
+        public bool Equals(byte[]? x, byte[]? y)
+        {
+            if (ReferenceEquals(x, y)) return true;
+            if (x is null || y is null || x.Length != y.Length) return false;
 
-    public int GetHashCode(byte[] obj)
-    {
-        return obj.XxHash3_32();
+            return x.AsSpan().SequenceEqual(y.AsSpan());
+        }
+
+        public int GetHashCode(byte[] obj)
+        {
+            return obj.XxHash3_32();
+        }
     }
 }

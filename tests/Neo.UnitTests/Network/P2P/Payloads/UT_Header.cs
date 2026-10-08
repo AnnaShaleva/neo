@@ -9,203 +9,136 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-using Neo.Extensions.IO;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Neo.Extensions;
 using Neo.IO;
 using Neo.Network.P2P.Payloads;
 using Neo.SmartContract.Native;
+using System;
 using System.Runtime.CompilerServices;
 
-namespace Neo.UnitTests.Network.P2P.Payloads;
-
-[TestClass]
-public class UT_Header
+namespace Neo.UnitTests.Network.P2P.Payloads
 {
-    private static readonly string s_headerHex =
-        "0000000000000000000000000000000000000000000000000000000000000000000000007227ba7b747f1a9" +
-        "8f68679d4a98b68927646ab195a6f56b542ca5a0e6a412662493ed0e58f0100000000000000000000000000" +
-        "0000000000000000000000000000000000000000000001000111";
-
-    [TestMethod]
-    public void Size_Get()
+    [TestClass]
+    public class UT_Header
     {
-        var val256 = UInt256.Zero;
-        var uut = TestUtils.MakeHeader(null, val256);
-        // blockbase 4 + 64 + 1 + 32 + 4 + 4 + 20 + 4
-        // header 1
-        Assert.AreEqual(113, uut.Size); // 105 + nonce
-    }
+        private static readonly string s_headerHex =
+            "0000000000000000000000000000000000000000000000000000000000000000000000007227ba7b747f1a9" +
+            "8f68679d4a98b68927646ab195a6f56b542ca5a0e6a412662493ed0e58f0100000000000000000000000000" +
+            "0000000000000000000000000000000000000000000001000111";
 
-    [TestMethod]
-    public void GetHashCodeTest()
-    {
-        var val256 = UInt256.Zero;
-        var uut = TestUtils.MakeHeader(null, val256);
-        Assert.AreEqual(uut.Hash.GetHashCode(), uut.GetHashCode());
-    }
-
-    [TestMethod]
-    public void TrimTest()
-    {
-        var val256 = UInt256.Zero;
-        var snapshotCache = TestBlockchain.GetTestSnapshotCache().CloneCache();
-        var uut = TestUtils.MakeHeader(null, val256);
-        uut.Witness = Witness.Empty;
-
-        TestUtils.BlocksAdd(snapshotCache, uut.Hash, new TrimmedBlock()
+        [TestMethod]
+        public void Size_Get()
         {
-            Header = new Header
+            var val256 = UInt256.Zero;
+            var uut = TestUtils.MakeHeader(null, val256);
+            // blockbase 4 + 64 + 1 + 32 + 4 + 4 + 20 + 4
+            // header 1
+            Assert.AreEqual(113, uut.Size); // 105 + nonce
+        }
+
+        [TestMethod]
+        public void GetHashCodeTest()
+        {
+            var val256 = UInt256.Zero;
+            var uut = TestUtils.MakeHeader(null, val256);
+            Assert.AreEqual(uut.Hash.GetHashCode(), uut.GetHashCode());
+        }
+
+        [TestMethod]
+        public void TrimTest()
+        {
+            var val256 = UInt256.Zero;
+            var snapshotCache = TestBlockchain.GetTestSnapshotCache().CloneCache();
+            var uut = TestUtils.MakeHeader(null, val256);
+            uut.Witness = Witness.Empty;
+
+            TestUtils.BlocksAdd(snapshotCache, uut.Hash, new TrimmedBlock()
             {
-                Timestamp = uut.Timestamp,
-                PrevHash = uut.PrevHash,
-                MerkleRoot = uut.MerkleRoot,
-                NextConsensus = uut.NextConsensus,
-                Witness = uut.Witness
-            },
-            Hashes = []
-        });
+                Header = new Header
+                {
+                    Timestamp = uut.Timestamp,
+                    PrevHash = uut.PrevHash,
+                    MerkleRoot = uut.MerkleRoot,
+                    NextConsensus = uut.NextConsensus,
+                    Witness = uut.Witness
+                },
+                Hashes = []
+            });
 
-        var trim = NativeContract.Ledger.GetTrimmedBlock(snapshotCache, uut.Hash)!;
-        var header = trim.Header;
+            var trim = NativeContract.Ledger.GetTrimmedBlock(snapshotCache, uut.Hash);
+            var header = trim.Header;
 
-        Assert.AreEqual(uut.Version, header.Version);
-        Assert.AreEqual(uut.PrevHash, header.PrevHash);
-        Assert.AreEqual(uut.MerkleRoot, header.MerkleRoot);
-        Assert.AreEqual(uut.Timestamp, header.Timestamp);
-        Assert.AreEqual(uut.Index, header.Index);
-        Assert.AreEqual(uut.NextConsensus, header.NextConsensus);
-        CollectionAssert.AreEqual(uut.Witness.InvocationScript.ToArray(), header.Witness.InvocationScript.ToArray());
-        CollectionAssert.AreEqual(uut.Witness.VerificationScript.ToArray(), header.Witness.VerificationScript.ToArray());
-        Assert.IsEmpty(trim.Hashes);
-    }
+            Assert.AreEqual(uut.Version, header.Version);
+            Assert.AreEqual(uut.PrevHash, header.PrevHash);
+            Assert.AreEqual(uut.MerkleRoot, header.MerkleRoot);
+            Assert.AreEqual(uut.Timestamp, header.Timestamp);
+            Assert.AreEqual(uut.Index, header.Index);
+            Assert.AreEqual(uut.NextConsensus, header.NextConsensus);
+            Assert.AreSequenceEqual(uut.Witness.InvocationScript.ToArray(), header.Witness.InvocationScript.ToArray());
+            Assert.AreSequenceEqual(uut.Witness.VerificationScript.ToArray(), header.Witness.VerificationScript.ToArray());
+            Assert.IsEmpty(trim.Hashes);
+        }
 
-    [TestMethod]
-    public void Deserialize()
-    {
-        var uut = TestUtils.MakeHeader(null, UInt256.Zero);
-        MemoryReader reader = new(s_headerHex.HexToBytes());
-        uut.Deserialize(ref reader);
-    }
-
-    [TestMethod]
-    public void CloneTest()
-    {
-        var uut = TestUtils.MakeHeader(null, UInt256.Zero);
-        var clone = uut.Clone();
-        CollectionAssert.AreEqual(uut.ToArray(), clone.ToArray());
-        // Check not referenced
-        uut.Witness.InvocationScript = new byte[123];
-        CollectionAssert.AreNotEqual(clone.Witness.InvocationScript.ToArray(), uut.Witness.InvocationScript.ToArray());
-    }
-
-    [TestMethod]
-    public void Equals_SameHeader()
-    {
-        var uut = (Header)RuntimeHelpers.GetUninitializedObject(typeof(Header));
-        Assert.IsTrue(uut.Equals(uut));
-    }
-
-    [TestMethod]
-    public void Equals_SameHash()
-    {
-        var prevHash = new UInt256(TestUtils.GetByteArray(32, 0x42));
-        var uut = TestUtils.MakeHeader(null, prevHash);
-        var header = TestUtils.MakeHeader(null, prevHash);
-
-        Assert.IsTrue(uut.Equals(header));
-    }
-
-    [TestMethod]
-    public void Equals_SameObject()
-    {
-        var uut = (Header)RuntimeHelpers.GetUninitializedObject(typeof(Header));
-        Assert.IsTrue(uut.Equals((object)uut));
-    }
-
-    [TestMethod]
-    public void Serialize()
-    {
-        var uut = TestUtils.MakeHeader(null, UInt256.Zero);
-        Assert.AreEqual(s_headerHex, uut.ToArray().ToHexString());
-    }
-
-    [TestMethod]
-    public void TestWitness()
-    {
-        IVerifiable item = (Header)RuntimeHelpers.GetUninitializedObject(typeof(Header));
-        item.Witnesses = [new()];
-        Assert.HasCount(1, item.Witnesses);
-    }
-
-    [TestMethod]
-    public void TestGetScriptHashesForVerifying_NullSnapshot()
-    {
-        var account1 = UInt160.Parse("0x0100000000000000000000000000000000000000");
-        var account2 = UInt160.Parse("0x0200000000000000000000000000000000000000");
-
-        var tx = new Transaction
+        [TestMethod]
+        public void Deserialize()
         {
-            Attributes = [],
-            Witnesses = [Witness.Empty],
-            Signers = new[]
-            {
-                new Signer { Account = account1 },
-                new Signer { Account = account2 }
-            }
-        };
+            var uut = TestUtils.MakeHeader(null, UInt256.Zero);
+            MemoryReader reader = new(s_headerHex.HexToBytes());
+            uut.Deserialize(ref reader);
+        }
 
-        var hashes = tx.GetScriptHashesForVerifying(null);
-        CollectionAssert.AreEqual(new[] { account1, account2 }, hashes);
-    }
-
-    [TestMethod]
-    public void TestGetScriptHashesForVerifying_NullSnapshotGetSender()
-    {
-        var sender = UInt160.Parse("0x0100000000000000000000000000000000000000");
-        var payload = new ExtensiblePayload
+        [TestMethod]
+        public void CloneTest()
         {
-            Category = "",
-            Witness = new() { },
-            Sender = sender
-        };
-        var hashes = ((IVerifiable)payload).GetScriptHashesForVerifying(null);
-        CollectionAssert.AreEqual(new[] { sender }, hashes);
-    }
+            var uut = TestUtils.MakeHeader(null, UInt256.Zero);
+            var clone = uut.Clone();
+            Assert.AreSequenceEqual(uut.ToArray(), clone.ToArray());
+            // Check not referenced
+            uut.Witness.InvocationScript = new byte[123];
+            Assert.AreNotSequenceEqual(clone.Witness.InvocationScript.ToArray(), uut.Witness.InvocationScript.ToArray());
+        }
 
-    [TestMethod]
-    public void TestGetScriptHashesForVerifying_NullSnapshotGetWitness()
-    {
-        var header = new Header
+        [TestMethod]
+        public void Equals_SameHeader()
         {
-            PrevHash = UInt256.Zero,
-            Witness = new Witness
-            {
-                InvocationScript = Array.Empty<byte>(),
-                VerificationScript = new byte[] { 0x01, 0x02, 0x03 }
-            },
-            MerkleRoot = UInt256.Zero,
-            NextConsensus = null!
-        };
+            var uut = (Header)RuntimeHelpers.GetUninitializedObject(typeof(Header));
+            Assert.IsTrue(uut.Equals(uut));
+        }
 
-        var hashes = ((IVerifiable)header).GetScriptHashesForVerifying(null);
-
-        CollectionAssert.AreEqual(new[] { header.Witness.ScriptHash }, hashes);
-    }
-
-    [TestMethod]
-    public void TestGetScriptHashesForVerifying_NullSnapshotThrows()
-    {
-        var header = new Header
+        [TestMethod]
+        public void Equals_SameHash()
         {
-            PrevHash = "0x0100000000000000000000000000000000000000000000000000000000000000",
-            Witness = new Witness
-            {
-                InvocationScript = Array.Empty<byte>(),
-                VerificationScript = new byte[] { 0x01 }
-            },
-            MerkleRoot = UInt256.Zero,
-            NextConsensus = null!
-        };
+            var prevHash = new UInt256(TestUtils.GetByteArray(32, 0x42));
+            var uut = TestUtils.MakeHeader(null, prevHash);
+            var header = TestUtils.MakeHeader(null, prevHash);
 
-        Assert.ThrowsExactly<ArgumentNullException>(() => ((IVerifiable)header).GetScriptHashesForVerifying(null));
+            Assert.IsTrue(uut.Equals(header));
+        }
+
+        [TestMethod]
+        public void Equals_SameObject()
+        {
+            var uut = (Header)RuntimeHelpers.GetUninitializedObject(typeof(Header));
+            Assert.IsTrue(uut.Equals((object)uut));
+        }
+
+        [TestMethod]
+        public void Serialize()
+        {
+            var uut = TestUtils.MakeHeader(null, UInt256.Zero);
+            Assert.AreEqual(s_headerHex, uut.ToArray().ToHexString());
+        }
+
+        [TestMethod]
+        public void TestWitness()
+        {
+            IVerifiable item = (Header)RuntimeHelpers.GetUninitializedObject(typeof(Header));
+            void Actual() => item.Witnesses = null;
+            Assert.ThrowsExactly<ArgumentNullException>(Actual);
+
+            item.Witnesses = [new()];
+            Assert.HasCount(1, item.Witnesses);
+        }
     }
 }

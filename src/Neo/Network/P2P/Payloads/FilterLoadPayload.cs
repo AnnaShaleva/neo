@@ -11,62 +11,64 @@
 
 using Neo.Cryptography;
 using Neo.Extensions;
-using Neo.Extensions.IO;
 using Neo.IO;
+using System;
+using System.IO;
 
-namespace Neo.Network.P2P.Payloads;
-
-/// <summary>
-/// This message is sent to load the <see cref="BloomFilter"/>.
-/// </summary>
-public class FilterLoadPayload : ISerializable
+namespace Neo.Network.P2P.Payloads
 {
     /// <summary>
-    /// The data of the <see cref="BloomFilter"/>.
+    /// This message is sent to load the <see cref="BloomFilter"/>.
     /// </summary>
-    public ReadOnlyMemory<byte> Filter;
-
-    /// <summary>
-    /// The number of hash functions used by the <see cref="BloomFilter"/>.
-    /// </summary>
-    public byte K;
-
-    /// <summary>
-    /// Used to generate the seeds of the murmur hash functions.
-    /// </summary>
-    public uint Tweak;
-
-    public int Size => Filter.GetVarSize() + sizeof(byte) + sizeof(uint);
-
-    /// <summary>
-    /// Creates a new instance of the <see cref="FilterLoadPayload"/> class.
-    /// </summary>
-    /// <param name="filter">The fields in the filter will be copied to the payload.</param>
-    /// <returns>The created payload.</returns>
-    public static FilterLoadPayload Create(BloomFilter filter)
+    public class FilterLoadPayload : ISerializable
     {
-        byte[] buffer = new byte[filter.M / 8];
-        filter.GetBits(buffer);
-        return new FilterLoadPayload
+        /// <summary>
+        /// The data of the <see cref="BloomFilter"/>.
+        /// </summary>
+        public ReadOnlyMemory<byte> Filter;
+
+        /// <summary>
+        /// The number of hash functions used by the <see cref="BloomFilter"/>.
+        /// </summary>
+        public byte K;
+
+        /// <summary>
+        /// Used to generate the seeds of the murmur hash functions.
+        /// </summary>
+        public uint Tweak;
+
+        public int Size => Filter.GetVarSize() + sizeof(byte) + sizeof(uint);
+
+        /// <summary>
+        /// Creates a new instance of the <see cref="FilterLoadPayload"/> class.
+        /// </summary>
+        /// <param name="filter">The fields in the filter will be copied to the payload.</param>
+        /// <returns>The created payload.</returns>
+        public static FilterLoadPayload Create(BloomFilter filter)
         {
-            Filter = buffer,
-            K = (byte)filter.K,
-            Tweak = filter.Tweak
-        };
-    }
+            byte[] buffer = new byte[filter.M / 8];
+            filter.GetBits(buffer);
+            return new FilterLoadPayload
+            {
+                Filter = buffer,
+                K = (byte)filter.K,
+                Tweak = filter.Tweak
+            };
+        }
 
-    void ISerializable.Deserialize(ref MemoryReader reader)
-    {
-        Filter = reader.ReadVarMemory(36000);
-        K = reader.ReadByte();
-        if (K > 50) throw new FormatException($"`K`({K}) is out of range [0, 50]");
-        Tweak = reader.ReadUInt32();
-    }
+        void ISerializable.Deserialize(ref MemoryReader reader)
+        {
+            Filter = reader.ReadVarMemory(36000);
+            K = reader.ReadByte();
+            if (K > 50) throw new FormatException($"`K`({K}) is out of range [0, 50]");
+            Tweak = reader.ReadUInt32();
+        }
 
-    void ISerializable.Serialize(BinaryWriter writer)
-    {
-        writer.WriteVarBytes(Filter.Span);
-        writer.Write(K);
-        writer.Write(Tweak);
+        void ISerializable.Serialize(BinaryWriter writer)
+        {
+            writer.WriteVarBytes(Filter.Span);
+            writer.Write(K);
+            writer.Write(Tweak);
+        }
     }
 }

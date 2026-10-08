@@ -9,64 +9,66 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-using Neo.Collections;
+using System.Collections.Generic;
+using System.Linq;
 
-namespace Neo.Extensions.Tests.Collections;
-
-[TestClass]
-public class UT_HashSetExtensions
+namespace Neo.Extensions.Tests.Collections
 {
-    [TestMethod]
-    public void TestRemoveHashsetDictionary()
+    [TestClass]
+    public class UT_HashSetExtensions
     {
-        var a = new HashSet<int>
+        [TestMethod]
+        public void TestRemoveHashsetDictionary()
         {
-            1,
-            2,
-            3
-        };
+            var a = new HashSet<int>
+            {
+                1,
+                2,
+                3
+            };
 
-        var b = new Dictionary<int, object?>
+            var b = new Dictionary<int, object?>
+            {
+                [2] = null
+            };
+
+            a.Remove(b);
+
+            Assert.AreSequenceEqual(new int[] { 1, 3 }, a.ToArray());
+
+            b[4] = null;
+            b[5] = null;
+            b[1] = null;
+            a.Remove(b);
+
+            Assert.AreSequenceEqual(new int[] { 3 }, a.ToArray());
+        }
+
+        [TestMethod]
+        public void TestRemoveHashsetSet()
         {
-            [2] = null
-        };
+            var a = new HashSet<int>
+            {
+                1,
+                2,
+                3
+            };
 
-        a.Remove(b);
+            var b = new SortedSet<int>()
+            {
+                2
+            };
 
-        CollectionAssert.AreEqual(new int[] { 1, 3 }, a.ToArray());
+            a.Remove(b);
 
-        b[4] = null;
-        b[5] = null;
-        b[1] = null;
-        a.Remove(b);
+            Assert.AreSequenceEqual(new int[] { 1, 3 }, a.ToArray());
 
-        CollectionAssert.AreEqual(new int[] { 3 }, a.ToArray());
-    }
+            b.Add(4);
+            b.Add(5);
+            b.Add(1);
+            a.Remove(b);
 
-    [TestMethod]
-    public void TestRemoveHashsetSet()
-    {
-        var a = new HashSet<int>
-        {
-            1,
-            2,
-            3
-        };
-
-        var b = new SortedSet<int>()
-        {
-            2
-        };
-
-        a.Remove(b);
-
-        CollectionAssert.AreEqual(new int[] { 1, 3 }, a.ToArray());
-
-        b.Add(4);
-        b.Add(5);
-        b.Add(1);
-        a.Remove(b);
-
-        CollectionAssert.AreEqual(new int[] { 3 }, a.ToArray());
+            Assert.AreSequenceEqual(new int[] { 3 }, a.ToArray());
+        }
     }
 }

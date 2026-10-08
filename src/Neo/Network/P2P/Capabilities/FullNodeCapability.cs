@@ -10,39 +10,41 @@
 // modifications are permitted.
 
 using Neo.IO;
+using System.IO;
 
-namespace Neo.Network.P2P.Capabilities;
-
-/// <summary>
-/// Indicates that a node has complete current state.
-/// </summary>
-public class FullNodeCapability : NodeCapability
+namespace Neo.Network.P2P.Capabilities
 {
     /// <summary>
-    /// Indicates the current block height of the node.
+    /// Indicates that a node has complete current state.
     /// </summary>
-    public uint StartHeight;
-
-    public override int Size =>
-        base.Size +    // Type
-        sizeof(uint);  // Start Height
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="FullNodeCapability"/> class.
-    /// </summary>
-    /// <param name="startHeight">The current block height of the node.</param>
-    public FullNodeCapability(uint startHeight = 0) : base(NodeCapabilityType.FullNode)
+    public class FullNodeCapability : NodeCapability
     {
-        StartHeight = startHeight;
-    }
+        /// <summary>
+        /// Indicates the current block height of the node.
+        /// </summary>
+        public uint StartHeight;
 
-    protected override void DeserializeWithoutType(ref MemoryReader reader)
-    {
-        StartHeight = reader.ReadUInt32();
-    }
+        public override int Size =>
+            base.Size +    // Type
+            sizeof(uint);  // Start Height
 
-    protected override void SerializeWithoutType(BinaryWriter writer)
-    {
-        writer.Write(StartHeight);
+        /// <summary>
+        /// Initializes a new instance of the <see cref="FullNodeCapability"/> class.
+        /// </summary>
+        /// <param name="startHeight">The current block height of the node.</param>
+        public FullNodeCapability(uint startHeight = 0) : base(NodeCapabilityType.FullNode)
+        {
+            StartHeight = startHeight;
+        }
+
+        protected override void DeserializeWithoutType(ref MemoryReader reader)
+        {
+            StartHeight = reader.ReadUInt32();
+        }
+
+        protected override void SerializeWithoutType(BinaryWriter writer)
+        {
+            writer.Write(StartHeight);
+        }
     }
 }

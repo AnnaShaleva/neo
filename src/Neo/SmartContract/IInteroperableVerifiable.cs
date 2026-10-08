@@ -11,18 +11,19 @@
 
 using Neo.VM.Types;
 
-namespace Neo.SmartContract;
-
-/// <summary>
-/// Represents the object that can be converted to and from <see cref="StackItem"/>
-/// and allows you to specify whether a verification is required.
-/// </summary>
-public interface IInteroperableVerifiable : IInteroperable
+namespace Neo.SmartContract
 {
     /// <summary>
-    /// Convert a <see cref="StackItem"/> to the current object.
+    /// Represents the object that can be converted to and from <see cref="StackItem"/>
+    /// and allows you to specify whether a verification is required.
     /// </summary>
-    /// <param name="stackItem">The <see cref="StackItem"/> to convert.</param>
-    /// <param name="verify">Verify the content</param>
-    void FromStackItem(StackItem stackItem, bool verify = true);
+    public interface IInteroperableVerifiable : IInteroperable
+    {
+        /// <summary>
+        /// Convert a <see cref="StackItem"/> to the current object.
+        /// </summary>
+        /// <param name="stackItem">The <see cref="StackItem"/> to convert.</param>
+        /// <param name="verify">Verify the content</param>
+        void FromStackItem(StackItem stackItem, bool verify = true);
+    }
 }

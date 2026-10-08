@@ -9,91 +9,88 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Neo.Extensions;
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
-namespace Neo.Persistence.Providers;
-
-/// <summary>
-/// An in-memory <see cref="IStore"/> implementation that uses ConcurrentDictionary as the underlying storage.
-/// </summary>
-public sealed class MemoryStore : IStore
+namespace Neo.Persistence.Providers
 {
-    private readonly ConcurrentDictionary<byte[], byte[]> _innerData = new(ByteArrayEqualityComparer.Default);
-
-    /// <inheritdoc/>
-    public event IStore.OnNewSnapshotDelegate? OnNewSnapshot;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Delete(byte[] key)
+    /// <summary>
+    /// An in-memory <see cref="IStore"/> implementation that uses ConcurrentDictionary as the underlying storage.
+    /// </summary>
+    public class MemoryStore : IStore
     {
-        _innerData.TryRemove(key, out _);
-    }
+        private readonly ConcurrentDictionary<byte[], byte[]> _innerData = new(ByteArrayEqualityComparer.Default);
 
-    public void Dispose() { }
+        /// <inheritdoc/>
+        public event IStore.OnNewSnapshotDelegate? OnNewSnapshot;
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public IStoreSnapshot GetSnapshot()
-    {
-        var snapshot = new MemorySnapshot(this, _innerData);
-        OnNewSnapshot?.Invoke(this, snapshot);
-        return snapshot;
-    }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Delete(byte[] key)
+        {
+            _innerData.TryRemove(key, out _);
+        }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Put(byte[] key, byte[] value)
-    {
-        _innerData[key[..]] = value[..];
-    }
+        public void Dispose() { }
 
-    /// <inheritdoc/>
-    public IEnumerable<(byte[] Key, byte[] Value)> Find(byte[]? keyOrPrefix, SeekDirection direction = SeekDirection.Forward)
-    {
-        keyOrPrefix ??= [];
-        if (direction == SeekDirection.Backward && keyOrPrefix.Length == 0) yield break;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public IStoreSnapshot GetSnapshot()
+        {
+            var snapshot = new MemorySnapshot(this, _innerData);
+            OnNewSnapshot?.Invoke(this, snapshot);
+            return snapshot;
+        }
 
-        var comparer = direction == SeekDirection.Forward ? ByteArrayComparer.Default : ByteArrayComparer.Reverse;
-        IEnumerable<KeyValuePair<byte[], byte[]>> records = _innerData;
-        if (keyOrPrefix.Length > 0)
-            records = records
-                .Where(p => comparer.Compare(p.Key, keyOrPrefix) >= 0);
-        records = records.OrderBy(p => p.Key, comparer);
-        foreach (var pair in records)
-            yield return (pair.Key[..], pair.Value[..]);
-    }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Put(byte[] key, byte[] value)
+        {
+            _innerData[key[..]] = value[..];
+        }
 
-    public IEnumerable<(byte[] Key, byte[] Value)> FindRange(byte[] start, byte[] end, SeekDirection direction = SeekDirection.Forward)
-    {
-        var comparer = direction == SeekDirection.Forward ? ByteArrayComparer.Default : ByteArrayComparer.Reverse;
-        return _innerData
-            .Where(p => comparer.Compare(p.Key, start) >= 0 && comparer.Compare(p.Key, end) < 0)
-            .OrderBy(p => p.Key, comparer)
-            .Select(p => (p.Key[..], p.Value[..]));
-    }
+        /// <inheritdoc/>
+        public IEnumerable<(byte[] Key, byte[] Value)> Find(byte[]? keyOrPrefix, SeekDirection direction = SeekDirection.Forward, int skip = 0)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(skip);
+            keyOrPrefix ??= [];
+            if (direction == SeekDirection.Backward && keyOrPrefix.Length == 0) yield break;
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public byte[]? TryGet(byte[] key)
-    {
-        if (!_innerData.TryGetValue(key, out var value)) return null;
-        return value[..];
-    }
+            var comparer = direction == SeekDirection.Forward ? ByteArrayComparer.Default : ByteArrayComparer.Reverse;
+            IEnumerable<KeyValuePair<byte[], byte[]>> records = _innerData;
+            if (keyOrPrefix.Length > 0)
+                records = records
+                    .Where(p => comparer.Compare(p.Key, keyOrPrefix) >= 0);
+            records = records.OrderBy(p => p.Key, comparer);
+            foreach (var pair in records.Skip(skip))
+                yield return (pair.Key[..], pair.Value[..]);
+        }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool TryGet(byte[] key, [NotNullWhen(true)] out byte[]? value)
-    {
-        return _innerData.TryGetValue(key, out value);
-    }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public byte[]? TryGet(byte[] key)
+        {
+            if (!_innerData.TryGetValue(key, out var value)) return null;
+            return value[..];
+        }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Contains(byte[] key)
-    {
-        return _innerData.ContainsKey(key);
-    }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryGet(byte[] key, [NotNullWhen(true)] out byte[]? value)
+        {
+            return _innerData.TryGetValue(key, out value);
+        }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void Reset()
-    {
-        _innerData.Clear();
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Contains(byte[] key)
+        {
+            return _innerData.ContainsKey(key);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void Reset()
+        {
+            _innerData.Clear();
+        }
     }
 }

@@ -9,15 +9,16 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.Cryptography;
-
-class MerkleTreeNode
+namespace Neo.Cryptography
 {
-    public UInt256? Hash { get; set; }
-    public MerkleTreeNode? Parent { get; set; }
-    public MerkleTreeNode? LeftChild { get; set; }
-    public MerkleTreeNode? RightChild { get; set; }
+    class MerkleTreeNode
+    {
+        public UInt256? Hash { get; set; }
+        public MerkleTreeNode? Parent { get; set; }
+        public MerkleTreeNode? LeftChild { get; set; }
+        public MerkleTreeNode? RightChild { get; set; }
 
-    public bool IsLeaf => LeftChild == null && RightChild == null;
-    public bool IsRoot => Parent == null;
+        public bool IsLeaf => LeftChild == null && RightChild == null;
+        public bool IsRoot => Parent == null;
+    }
 }

@@ -9,85 +9,89 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.SmartContract;
 using Neo.SmartContract.Manifest;
+using System;
 
-namespace Neo.UnitTests.SmartContract;
-
-[TestClass]
-public class UT_DeployedContract
+namespace Neo.UnitTests.SmartContract
 {
-    [TestMethod]
-    public void TestGetScriptHash()
+    [TestClass]
+    public class UT_DeployedContract
     {
-        var contract = new DeployedContract(new ContractState()
+        [TestMethod]
+        public void TestGetScriptHash()
         {
-            Manifest = new ContractManifest()
+            var contract = new DeployedContract(new ContractState()
             {
-                Name = "",
-                Groups = [],
-                SupportedStandards = [],
-                Abi = new ContractAbi()
+                Manifest = new ContractManifest()
                 {
-                    Methods = new[]
+                    Name = "",
+                    Groups = [],
+                    SupportedStandards = [],
+                    Abi = new ContractAbi()
                     {
-                        new ContractMethodDescriptor()
+                        Methods = new ContractMethodDescriptor[]
                         {
-                            Name = "verify",
-                            Parameters = Array.Empty<ContractParameterDefinition>()
-                        }
+                            new ContractMethodDescriptor()
+                            {
+                                Name = "verify",
+                                Parameters = Array.Empty<ContractParameterDefinition>()
+                            }
+                        },
+                        Events = []
                     },
-                    Events = []
+                    Permissions = [],
+                    Trusts = WildcardContainer<ContractPermissionDescriptor>.CreateWildcard()
                 },
-                Permissions = [],
-                Trusts = WildcardContainer<ContractPermissionDescriptor>.CreateWildcard()
-            },
-            Nef = new NefFile
-            {
-                Compiler = "",
-                Source = "",
-                Tokens = [],
-                Script = new byte[] { 1, 2, 3 }
-            },
-            Hash = new byte[] { 1, 2, 3 }.ToScriptHash()
-        });
+                Nef = new NefFile
+                {
+                    Compiler = "",
+                    Source = "",
+                    Tokens = [],
+                    Script = new byte[] { 1, 2, 3 }
+                },
+                Hash = new byte[] { 1, 2, 3 }.ToScriptHash()
+            });
 
-        Assert.AreEqual("0xb2e3fe334830b4741fa5d762f2ab36b90b86c49b", contract.ScriptHash.ToString());
-    }
+            Assert.AreEqual("0xb2e3fe334830b4741fa5d762f2ab36b90b86c49b", contract.ScriptHash.ToString());
+        }
 
-    [TestMethod]
-    public void TestErrors()
-    {
-        Assert.ThrowsExactly<NotSupportedException>(() => _ = new DeployedContract(new ContractState()
+        [TestMethod]
+        public void TestErrors()
         {
-            Hash = UInt160.Zero,
-            Manifest = new ContractManifest()
+            Assert.ThrowsExactly<ArgumentNullException>(() => _ = new DeployedContract(null));
+            Assert.ThrowsExactly<NotSupportedException>(() => _ = new DeployedContract(new ContractState()
             {
-                Name = "",
-                Groups = [],
-                SupportedStandards = [],
-                Abi = new ContractAbi()
+                Hash = UInt160.Zero,
+                Manifest = new ContractManifest()
                 {
-                    Methods = new[]
+                    Name = "",
+                    Groups = [],
+                    SupportedStandards = [],
+                    Abi = new ContractAbi()
                     {
-                        new ContractMethodDescriptor()
+                        Methods = new ContractMethodDescriptor[]
                         {
-                            Name = "noverify",
-                            Parameters = Array.Empty<ContractParameterDefinition>()
-                        }
+                            new ContractMethodDescriptor()
+                            {
+                                Name = "noverify",
+                                Parameters = Array.Empty<ContractParameterDefinition>()
+                            }
+                        },
+                        Events = []
                     },
-                    Events = []
+                    Permissions = [],
+                    Trusts = WildcardContainer<ContractPermissionDescriptor>.CreateWildcard()
                 },
-                Permissions = [],
-                Trusts = WildcardContainer<ContractPermissionDescriptor>.CreateWildcard()
-            },
-            Nef = new NefFile
-            {
-                Compiler = "",
-                Source = "",
-                Tokens = [],
-                Script = new byte[] { 1, 2, 3 }
-            }
-        }));
+                Nef = new NefFile
+                {
+                    Compiler = "",
+                    Source = "",
+                    Tokens = [],
+                    Script = new byte[] { 1, 2, 3 }
+                }
+            }));
+        }
     }
 }

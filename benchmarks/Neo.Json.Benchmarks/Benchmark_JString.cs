@@ -11,37 +11,38 @@
 
 using BenchmarkDotNet.Attributes;
 
-namespace Neo.Json.Benchmarks;
-
-[MemoryDiagnoser]
-[CsvMeasurementsExporter]
-[MarkdownExporter]
-public class Benchmark_JString
+namespace Neo.Json.Benchmarks
 {
-    private JString _testString = new(string.Empty);
-
-    [GlobalSetup]
-    public void Setup()
+    [MemoryDiagnoser]
+    [CsvMeasurementsExporter]
+    [MarkdownExporter]
+    public class Benchmark_JString
     {
-        _testString = new JString("hello world");
-    }
+        private JString _testString = new(string.Empty);
 
-    [Benchmark]
-    public void TestLength()
-    {
-        _ = _testString.Value.Length;
-    }
+        [GlobalSetup]
+        public void Setup()
+        {
+            _testString = new JString("hello world");
+        }
 
-    [Benchmark]
-    public void TestConversionToString()
-    {
-        _ = _testString.ToString();
-    }
+        [Benchmark]
+        public void TestLength()
+        {
+            _ = _testString.Value.Length;
+        }
 
-    [Benchmark]
-    public void TestClone()
-    {
-        _ = _testString.Clone();
+        [Benchmark]
+        public void TestConversionToString()
+        {
+            _ = _testString.ToString();
+        }
+
+        [Benchmark]
+        public void TestClone()
+        {
+            _ = _testString.Clone();
+        }
     }
 }
 

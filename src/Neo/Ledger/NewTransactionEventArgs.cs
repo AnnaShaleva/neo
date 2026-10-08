@@ -13,10 +13,11 @@ using Neo.Network.P2P.Payloads;
 using Neo.Persistence;
 using System.ComponentModel;
 
-namespace Neo.Ledger;
-
-public class NewTransactionEventArgs : CancelEventArgs
+namespace Neo.Ledger
 {
-    public required Transaction Transaction { get; init; }
-    public required IReadOnlyStore Snapshot { get; init; }
+    public class NewTransactionEventArgs : CancelEventArgs
+    {
+        public required Transaction Transaction { get; init; }
+        public required IReadOnlyStore Snapshot { get; init; }
+    }
 }

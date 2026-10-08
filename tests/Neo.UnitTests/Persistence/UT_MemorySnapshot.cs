@@ -9,166 +9,169 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.Persistence.Providers;
+using System.Linq;
 
-namespace Neo.UnitTests.Persistence;
-
-[TestClass]
-public class UT_MemorySnapshot
+namespace Neo.UnitTests.Persistence
 {
-    private MemoryStore _memoryStore = null!;
-    private MemorySnapshot _snapshot = null!;
-
-    [TestInitialize]
-    public void Setup()
+    [TestClass]
+    public class UT_MemorySnapshot
     {
-        _memoryStore = new MemoryStore();
-        _snapshot = (MemorySnapshot)_memoryStore.GetSnapshot();
-    }
+        private MemoryStore _memoryStore;
+        private MemorySnapshot _snapshot;
 
-    [TestCleanup]
-    public void CleanUp()
-    {
-        _memoryStore.Reset();
-    }
+        [TestInitialize]
+        public void Setup()
+        {
+            _memoryStore = new MemoryStore();
+            _snapshot = _memoryStore.GetSnapshot() as MemorySnapshot;
+        }
 
-    [TestMethod]
-    public void TestDobleCommit()
-    {
-        var key1 = new byte[] { 0x05, 0x02 };
-        var value1 = new byte[] { 0x06, 0x04 };
+        [TestCleanup]
+        public void CleanUp()
+        {
+            _memoryStore.Reset();
+        }
 
-        var snapshot = (MemorySnapshot)_memoryStore.GetSnapshot();
-        Assert.AreEqual(0, snapshot.WriteBatchLength);
+        [TestMethod]
+        public void TestDobleCommit()
+        {
+            var key1 = new byte[] { 0x05, 0x02 };
+            var value1 = new byte[] { 0x06, 0x04 };
 
-        snapshot.Put(key1, value1);
-        Assert.AreEqual(1, snapshot.WriteBatchLength);
+            var snapshot = (MemorySnapshot)_memoryStore.GetSnapshot();
+            Assert.AreEqual(0, snapshot.WriteBatchLength);
 
-        snapshot.Delete(key1);
-        Assert.AreEqual(1, snapshot.WriteBatchLength);
-        snapshot.Commit();
+            snapshot.Put(key1, value1);
+            Assert.AreEqual(1, snapshot.WriteBatchLength);
 
-        Assert.AreEqual(0, snapshot.WriteBatchLength);
-    }
+            snapshot.Delete(key1);
+            Assert.AreEqual(1, snapshot.WriteBatchLength);
+            snapshot.Commit();
 
-    [TestMethod]
-    public void TestDobleCommitTwo()
-    {
-        var key1 = new byte[] { 0x51, 0x02 };
-        var value1 = new byte[] { 0x06, 0x04 };
+            Assert.AreEqual(0, snapshot.WriteBatchLength);
+        }
 
-        var snapshotA = (MemorySnapshot)_memoryStore.GetSnapshot();
-        var snapshotB = (MemorySnapshot)_memoryStore.GetSnapshot();
+        [TestMethod]
+        public void TestDobleCommitTwo()
+        {
+            var key1 = new byte[] { 0x51, 0x02 };
+            var value1 = new byte[] { 0x06, 0x04 };
 
-        Assert.IsFalse(_memoryStore.Contains(key1));
-        snapshotA.Put(key1, value1);
-        snapshotA.Commit();
-        Assert.IsTrue(_memoryStore.Contains(key1));
+            var snapshotA = (MemorySnapshot)_memoryStore.GetSnapshot();
+            var snapshotB = (MemorySnapshot)_memoryStore.GetSnapshot();
 
-        snapshotB.Delete(key1);
-        snapshotB.Commit();
-        Assert.IsFalse(_memoryStore.Contains(key1));
+            Assert.IsFalse(_memoryStore.Contains(key1));
+            snapshotA.Put(key1, value1);
+            snapshotA.Commit();
+            Assert.IsTrue(_memoryStore.Contains(key1));
 
-        snapshotA.Put(key1, value1);
-        snapshotA.Commit();
-        Assert.IsTrue(_memoryStore.Contains(key1));
+            snapshotB.Delete(key1);
+            snapshotB.Commit();
+            Assert.IsFalse(_memoryStore.Contains(key1));
 
-        snapshotB.Commit(); // Already committed
-        Assert.IsTrue(_memoryStore.Contains(key1)); // It fails before #3953
-    }
+            snapshotA.Put(key1, value1);
+            snapshotA.Commit();
+            Assert.IsTrue(_memoryStore.Contains(key1));
 
-    [TestMethod]
-    public void SingleSnapshotTest()
-    {
-        var key1 = new byte[] { 0x01, 0x02 };
-        var value1 = new byte[] { 0x03, 0x04 };
+            snapshotB.Commit(); // Already committed
+            Assert.IsTrue(_memoryStore.Contains(key1)); // It fails before #3953
+        }
 
-        _snapshot.Delete(key1);
-        Assert.IsNull(_snapshot.TryGet(key1));
+        [TestMethod]
+        public void SingleSnapshotTest()
+        {
+            var key1 = new byte[] { 0x01, 0x02 };
+            var value1 = new byte[] { 0x03, 0x04 };
 
-        // Both Store and Snapshot can not get the value that are cached in the snapshot
-        _snapshot.Put(key1, value1);
-        Assert.IsNull(_snapshot.TryGet(key1));
-        Assert.IsNull(_memoryStore.TryGet(key1));
+            _snapshot.Delete(key1);
+            Assert.IsNull(_snapshot.TryGet(key1));
 
-        _snapshot.Commit();
+            // Both Store and Snapshot can not get the value that are cached in the snapshot
+            _snapshot.Put(key1, value1);
+            Assert.IsNull(_snapshot.TryGet(key1));
+            Assert.IsNull(_memoryStore.TryGet(key1));
 
-        // After commit the snapshot, the value can be get from the store but still can not get from the snapshot
-        CollectionAssert.AreEqual(value1, _memoryStore.TryGet(key1));
-        Assert.IsNull(_snapshot.TryGet(key1));
+            _snapshot.Commit();
 
-        _snapshot.Delete(key1);
+            // After commit the snapshot, the value can be get from the store but still can not get from the snapshot
+            Assert.AreSequenceEqual(value1, _memoryStore.TryGet(key1));
+            Assert.IsNull(_snapshot.TryGet(key1));
 
-        // Deleted value can not be found from the snapshot but can still get from the store
-        // This is because snapshot has no key1 at all.
-        Assert.IsFalse(_snapshot.Contains(key1));
-        Assert.IsTrue(_memoryStore.Contains(key1));
+            _snapshot.Delete(key1);
 
-        _snapshot.Commit();
+            // Deleted value can not be found from the snapshot but can still get from the store
+            // This is because snapshot has no key1 at all.
+            Assert.IsFalse(_snapshot.Contains(key1));
+            Assert.IsTrue(_memoryStore.Contains(key1));
 
-        // After commit the snapshot, the value can not be found from the store
-        Assert.IsFalse(_memoryStore.Contains(key1));
+            _snapshot.Commit();
 
-        // Test seek in order
-        _snapshot.Put([0x00, 0x00, 0x04], [0x04]);
-        _snapshot.Put([0x00, 0x00, 0x00], [0x00]);
-        _snapshot.Put([0x00, 0x00, 0x01], [0x01]);
-        _snapshot.Put([0x00, 0x00, 0x02], [0x02]);
-        _snapshot.Put([0x00, 0x00, 0x03], [0x03]);
+            // After commit the snapshot, the value can not be found from the store
+            Assert.IsFalse(_memoryStore.Contains(key1));
 
-        // Can not get anything from the snapshot
-        var entries = _snapshot.Find([0x00, 0x00, 0x02]).ToArray();
-        Assert.IsEmpty(entries);
-    }
+            // Test seek in order
+            _snapshot.Put([0x00, 0x00, 0x04], [0x04]);
+            _snapshot.Put([0x00, 0x00, 0x00], [0x00]);
+            _snapshot.Put([0x00, 0x00, 0x01], [0x01]);
+            _snapshot.Put([0x00, 0x00, 0x02], [0x02]);
+            _snapshot.Put([0x00, 0x00, 0x03], [0x03]);
 
-    [TestMethod]
-    public void MultiSnapshotTest()
-    {
-        var key1 = new byte[] { 0x01, 0x02 };
-        var value1 = new byte[] { 0x03, 0x04 };
+            // Can not get anything from the snapshot
+            var entries = _snapshot.Find([0x00, 0x00, 0x02]).ToArray();
+            Assert.IsEmpty(entries);
+        }
 
-        _snapshot.Delete(key1);
-        Assert.IsNull(_snapshot.TryGet(key1));
+        [TestMethod]
+        public void MultiSnapshotTest()
+        {
+            var key1 = new byte[] { 0x01, 0x02 };
+            var value1 = new byte[] { 0x03, 0x04 };
 
-        // Both Store and Snapshot can not get the value that are cached in the snapshot
-        _snapshot.Put(key1, value1);
-        // After commit the snapshot, the value can be get from the store but still can not get from the snapshot
-        // But can get the value from a new snapshot
-        _snapshot.Commit();
-        var snapshot2 = _memoryStore.GetSnapshot();
-        CollectionAssert.AreEqual(value1, _memoryStore.TryGet(key1));
-        Assert.IsNull(_snapshot.TryGet(key1));
-        Assert.IsTrue(snapshot2.TryGet(key1, out var result));
-        CollectionAssert.AreEqual(value1, result);
+            _snapshot.Delete(key1);
+            Assert.IsNull(_snapshot.TryGet(key1));
 
-        Assert.IsFalse(_snapshot.TryGet(key1, out _));
+            // Both Store and Snapshot can not get the value that are cached in the snapshot
+            _snapshot.Put(key1, value1);
+            // After commit the snapshot, the value can be get from the store but still can not get from the snapshot
+            // But can get the value from a new snapshot
+            _snapshot.Commit();
+            var snapshot2 = _memoryStore.GetSnapshot();
+            Assert.AreSequenceEqual(value1, _memoryStore.TryGet(key1));
+            Assert.IsNull(_snapshot.TryGet(key1));
+            Assert.IsTrue(snapshot2.TryGet(key1, out var result));
+            Assert.AreSequenceEqual(value1, result);
 
-        Assert.IsTrue(snapshot2.TryGet(key1, out var value2));
-        CollectionAssert.AreEqual(value1, value2);
+            Assert.IsFalse(_snapshot.TryGet(key1, out var value2));
 
-        Assert.IsTrue(_memoryStore.TryGet(key1, out value2));
-        CollectionAssert.AreEqual(value1, value2);
+            Assert.IsTrue(snapshot2.TryGet(key1, out value2));
+            Assert.AreSequenceEqual(value1, value2);
 
-        _snapshot.Delete(key1);
+            Assert.IsTrue(_memoryStore.TryGet(key1, out value2));
+            Assert.AreSequenceEqual(value1, value2);
 
-        // Deleted value can not being found from the snapshot but can still get from the store and snapshot2
-        Assert.IsFalse(_snapshot.Contains(key1));
-        Assert.IsTrue(_memoryStore.Contains(key1));
-        Assert.IsTrue(snapshot2.Contains(key1));
+            _snapshot.Delete(key1);
 
-        _snapshot.Commit();
+            // Deleted value can not being found from the snapshot but can still get from the store and snapshot2
+            Assert.IsFalse(_snapshot.Contains(key1));
+            Assert.IsTrue(_memoryStore.Contains(key1));
+            Assert.IsTrue(snapshot2.Contains(key1));
 
-        // After commit the snapshot, the value can not be found from the store, but can be found in snapshots
-        // Cause snapshot1 or store can not change the status of snapshot2.
-        Assert.IsFalse(_memoryStore.Contains(key1));
-        Assert.IsTrue(snapshot2.Contains(key1));
-        Assert.IsFalse(_snapshot.Contains(key1));
+            _snapshot.Commit();
 
-        // Add value via snapshot2 will not affect snapshot1 at all
-        snapshot2.Put(key1, value1);
-        snapshot2.Commit();
-        Assert.IsNull(_snapshot.TryGet(key1));
-        Assert.IsTrue(snapshot2.TryGet(key1, out result));
-        CollectionAssert.AreEqual(value1, result);
+            // After commit the snapshot, the value can not be found from the store, but can be found in snapshots
+            // Cause snapshot1 or store can not change the status of snapshot2.
+            Assert.IsFalse(_memoryStore.Contains(key1));
+            Assert.IsTrue(snapshot2.Contains(key1));
+            Assert.IsFalse(_snapshot.Contains(key1));
+
+            // Add value via snapshot2 will not affect snapshot1 at all
+            snapshot2.Put(key1, value1);
+            snapshot2.Commit();
+            Assert.IsNull(_snapshot.TryGet(key1));
+            Assert.IsTrue(snapshot2.TryGet(key1, out result));
+            Assert.AreSequenceEqual(value1, result);
+        }
     }
 }

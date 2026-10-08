@@ -9,21 +9,24 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.Network.P2P;
+using System;
 
-/// <summary>
-/// Represents the flags of a message.
-/// </summary>
-[Flags]
-public enum MessageFlags : byte
+namespace Neo.Network.P2P
 {
     /// <summary>
-    /// No flag is set for the message.
+    /// Represents the flags of a message.
     /// </summary>
-    None = 0,
+    [Flags]
+    public enum MessageFlags : byte
+    {
+        /// <summary>
+        /// No flag is set for the message.
+        /// </summary>
+        None = 0,
 
-    /// <summary>
-    /// Indicates that the message is compressed.
-    /// </summary>
-    Compressed = 1 << 0
+        /// <summary>
+        /// Indicates that the message is compressed.
+        /// </summary>
+        Compressed = 1 << 0
+    }
 }

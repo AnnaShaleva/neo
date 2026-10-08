@@ -9,68 +9,60 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-using Neo.Exceptions;
+using Neo.Extensions.Exceptions;
+using System;
 
-namespace Neo.Extensions.Tests.Exceptions;
-
-[TestClass]
-public class UT_TryCatchExceptions
+namespace Neo.Extensions.Tests.Exceptions
 {
-    [TestMethod]
-    public void TestTryCatchMethods()
+    [TestClass]
+    public class UT_TryCatchExceptions
     {
-        var actualObject = new object();
-
-        // action
-        actualObject.TryCatch(a => actualObject = a = null);
-        Assert.IsNull(actualObject);
-
-        // action
-        actualObject.TryCatch<object, ArgumentException>(a => throw new ArgumentException(), (_, ex) => actualObject = ex);
-        Assert.IsInstanceOfType<ArgumentException>(actualObject);
-
-        var expectedObject = new object();
-
-        // func
-        actualObject = expectedObject.TryCatch<object, ArgumentException, ArgumentException>(
-            a => throw new ArgumentException(),
-            (_, ex) => ex);
-        Assert.IsInstanceOfType<ArgumentException>(actualObject);
-    }
-
-    [TestMethod]
-    public void TestTryCatchThrowMethods()
-    {
-        var actualObject = new object();
-
-        //action
-        Assert.ThrowsExactly<ArgumentException>(
-            () => actualObject.TryCatchThrow<object, ArgumentException>(a => throw new ArgumentException()));
-
-        Assert.ThrowsExactly<ArgumentException>(
-            () => actualObject.TryCatchThrow<object, ArgumentException, object>(a =>
-            {
-                throw new ArgumentException();
-            }));
-
-        var expectedMessage = "Hello World";
-
-        try
+        [TestMethod]
+        public void TestTryCatchMethods()
         {
-            actualObject.TryCatchThrow<object, ArgumentException>(a => throw new ArgumentException(), expectedMessage);
-        }
-        catch (ArgumentException actualException)
-        {
-            Assert.AreEqual(expectedMessage, actualException.Message);
+            var actualObject = new object();
+
+            // action
+            actualObject.TryCatch(a => actualObject = a = null);
+            Assert.IsNull(actualObject);
+
+            // action
+            actualObject.TryCatch<object, ArgumentException>(a => throw new ArgumentException(), (_, ex) => actualObject = ex);
+            Assert.IsInstanceOfType<ArgumentException>(actualObject);
+
+            var expectedObject = new object();
+
+            // func
+            actualObject = expectedObject.TryCatch<object, ArgumentException, ArgumentException>(
+                a => throw new ArgumentException(),
+                (_, ex) => ex);
+            Assert.IsInstanceOfType<ArgumentException>(actualObject);
         }
 
-        try
+        [TestMethod]
+        public void TestTryCatchThrowMethods()
         {
-            actualObject.TryCatchThrow<object, ArgumentException, ArgumentException>(a => throw new ArgumentException(), expectedMessage);
-        }
-        catch (ArgumentException actualException)
-        {
-            Assert.AreEqual(expectedMessage, actualException.Message);
+            var actualObject = new object();
+
+            //action
+            Assert.ThrowsExactly<ArgumentException>(
+                () => actualObject.TryCatchThrow<object, ArgumentException>(a => throw new ArgumentException()));
+
+            Assert.ThrowsExactly<ArgumentException>(
+                () => actualObject.TryCatchThrow<object, ArgumentException, object>(a =>
+                {
+                    throw new ArgumentException();
+                }));
+
+            var expectedMessage = "Hello World";
+
+            var actualException1 = Assert.ThrowsExactly<ArgumentException>(
+                () => actualObject.TryCatchThrow<object, ArgumentException>(a => throw new ArgumentException(), expectedMessage));
+            Assert.AreEqual(expectedMessage, actualException1.Message);
+
+            var actualException2 = Assert.ThrowsExactly<ArgumentException>(
+                () => actualObject.TryCatchThrow<object, ArgumentException, ArgumentException>(a => throw new ArgumentException(), expectedMessage));
+            Assert.AreEqual(expectedMessage, actualException2.Message);
         }
     }
 }

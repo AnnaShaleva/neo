@@ -9,40 +9,59 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-namespace Neo;
-
-/// <summary>
-/// Defines methods to support the comparison of two <see cref="byte"/>[].
-/// </summary>
-public class ByteArrayComparer : IComparer<byte[]>
+namespace Neo.Extensions
 {
-    public static readonly ByteArrayComparer Default = new(1);
-    public static readonly ByteArrayComparer Reverse = new(-1);
-
-    private readonly int _direction;
-
-    private ByteArrayComparer(int direction)
+    /// <summary>
+    /// Defines methods to support the comparison of two <see cref="byte"/>[] or <see cref="ReadOnlySpan{Byte}"/>.
+    /// </summary>
+    public class ByteArrayComparer : IComparer<byte[]>, IComparer<ReadOnlySpan<byte>>
     {
-        _direction = direction;
-    }
+        public static readonly ByteArrayComparer Default = new(1);
+        public static readonly ByteArrayComparer Reverse = new(-1);
 
-    /// <inheritdoc />
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public int Compare(byte[]? x, byte[]? y)
-    {
-        if (ReferenceEquals(x, y)) return 0;
+        /// <summary>
+        /// Gets the direction of the comparison.
+        /// </summary>
+        protected readonly int Direction;
 
-        if (x is null) // y must not be null
-            return -y!.Length * _direction;
+        protected ByteArrayComparer(int direction)
+        {
+            Direction = direction;
+        }
 
-        if (y is null) // x must not be null
-            return x.Length * _direction;
+        /// <inheritdoc />
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int Compare(byte[]? x, byte[]? y)
+        {
+            if (ReferenceEquals(x, y)) return 0;
 
-        // Note: if "SequenceCompareTo" is "int.MinValue * -1", it
-        // will overflow "int.MaxValue". Seeing how "int.MinValue * -1"
-        // value would be "int.MaxValue + 1"
-        return unchecked(x.AsSpan().SequenceCompareTo(y.AsSpan()) * _direction);
+            if (x is null) // y must not be null
+                return -y!.Length * Direction;
+
+            if (y is null) // x must not be null
+                return x.Length * Direction;
+
+            // Note: if "SequenceCompareTo" is "int.MinValue * -1", it
+            // will overflow "int.MaxValue". Seeing how "int.MinValue * -1"
+            // value would be "int.MaxValue + 1"
+            return unchecked(x.AsSpan().SequenceCompareTo(y.AsSpan()) * Direction);
+        }
+
+        /// <inheritdoc />
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int Compare(ReadOnlySpan<byte> x, ReadOnlySpan<byte> y)
+        {
+            // Note:
+            // - "SequenceCompareTo" already handles the empty/empty, empty/non-empty
+            // and non-empty/empty cases correctly, so no special-casing is needed here.
+            // - If "SequenceCompareTo" is "int.MinValue * -1", it
+            // will overflow "int.MaxValue". Seeing how "int.MinValue * -1"
+            // value would be "int.MaxValue + 1"
+            return unchecked(x.SequenceCompareTo(y) * Direction);
+        }
     }
 }

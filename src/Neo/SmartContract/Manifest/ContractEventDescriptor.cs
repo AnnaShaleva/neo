@@ -12,108 +12,112 @@
 using Neo.Json;
 using Neo.VM;
 using Neo.VM.Types;
+using System;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using Array = Neo.VM.Types.Array;
 
-namespace Neo.SmartContract.Manifest;
-
-/// <summary>
-/// Represents an event in a smart contract ABI.
-/// </summary>
-public class ContractEventDescriptor : IInteroperable, IEquatable<ContractEventDescriptor>
+namespace Neo.SmartContract.Manifest
 {
     /// <summary>
-    /// The name of the event or method.
+    /// Represents an event in a smart contract ABI.
     /// </summary>
-    public required string Name { get; set; }
-
-    /// <summary>
-    /// The parameters of the event or method.
-    /// </summary>
-    public required ContractParameterDefinition[] Parameters { get; set; }
-
-    public virtual void FromStackItem(StackItem stackItem)
+    public class ContractEventDescriptor : IInteroperable, IEquatable<ContractEventDescriptor>
     {
-        Struct @struct = (Struct)stackItem;
-        Name = @struct[0].GetString()!;
-        Parameters = ((Array)@struct[1]).Select(p => p.ToInteroperable<ContractParameterDefinition>()).ToArray();
-    }
+        /// <summary>
+        /// The name of the event or method.
+        /// </summary>
+        public required string Name { get; set; }
 
-    public virtual StackItem ToStackItem(IReferenceCounter? referenceCounter)
-    {
-        return new Struct(referenceCounter)
+        /// <summary>
+        /// The parameters of the event or method.
+        /// </summary>
+        public required ContractParameterDefinition[] Parameters { get; set; }
+
+        public virtual void FromStackItem(StackItem stackItem)
         {
-            Name,
-            new Array(referenceCounter, Parameters.Select(p => p.ToStackItem(referenceCounter)))
-        };
-    }
+            Struct @struct = (Struct)stackItem;
+            Name = @struct[0].GetString()!;
+            Parameters = ((Array)@struct[1]).Select(p => p.ToInteroperable<ContractParameterDefinition>()).ToArray();
+        }
 
-    /// <summary>
-    /// Converts the event from a JSON object.
-    /// </summary>
-    /// <param name="json">The event represented by a JSON object.</param>
-    /// <returns>The converted event.</returns>
-    public static ContractEventDescriptor FromJson(JObject json)
-    {
-        ContractEventDescriptor descriptor = new()
+        public virtual StackItem ToStackItem()
         {
-            Name = json["name"]!.GetString(),
-            Parameters = ((JArray)json["parameters"]!).Select(u => ContractParameterDefinition.FromJson((JObject)u!)).ToArray(),
-        };
-        if (string.IsNullOrEmpty(descriptor.Name)) throw new FormatException("Name in ContractEventDescriptor is empty");
-        _ = descriptor.Parameters.ToDictionary(p => p.Name);
-        return descriptor;
-    }
+            return new Struct()
+            {
+                Name,
+                new Array(Parameters.Select(p => p.ToStackItem()))
+            };
+        }
 
-    /// <summary>
-    /// Converts the event to a JSON object.
-    /// </summary>
-    /// <returns>The event represented by a JSON object.</returns>
-    public virtual JObject ToJson()
-    {
-        return new JObject()
+        /// <summary>
+        /// Converts the event from a JSON object.
+        /// </summary>
+        /// <param name="json">The event represented by a JSON object.</param>
+        /// <returns>The converted event.</returns>
+        public static ContractEventDescriptor FromJson(JObject json)
         {
-            ["name"] = Name,
-            ["parameters"] = new JArray(Parameters.Select(u => u.ToJson()).ToArray())
-        };
-    }
+            ContractEventDescriptor descriptor = new()
+            {
+                Name = json["name"]!.GetString(),
+                Parameters = ((JArray)json["parameters"]!).Select(u => ContractParameterDefinition.FromJson((JObject)u!)).ToArray(),
+            };
+            if (string.IsNullOrEmpty(descriptor.Name)) throw new FormatException("Name in ContractEventDescriptor is empty");
+            _ = descriptor.Parameters.ToDictionary(p => p.Name);
+            return descriptor;
+        }
 
-    public bool Equals(ContractEventDescriptor? other)
-    {
-        if (other is null) return false;
-        if (ReferenceEquals(this, other)) return true;
+        /// <summary>
+        /// Converts the event to a JSON object.
+        /// </summary>
+        /// <returns>The event represented by a JSON object.</returns>
+        public virtual JObject ToJson()
+        {
+            return new JObject()
+            {
+                ["name"] = Name,
+                ["parameters"] = new JArray(Parameters.Select(u => u.ToJson()).ToArray())
+            };
+        }
 
-        return Name == other.Name && Parameters.SequenceEqual(other.Parameters);
-    }
+        public bool Equals(ContractEventDescriptor? other)
+        {
+            if (other is null) return false;
+            if (ReferenceEquals(this, other)) return true;
 
-    public override bool Equals(object? other)
-    {
-        if (other is not ContractEventDescriptor ev)
-            return false;
+            return Name == other.Name && Parameters.SequenceEqual(other.Parameters);
+        }
 
-        return Equals(ev);
-    }
+        public override bool Equals(object? other)
+        {
+            if (other is not ContractEventDescriptor ev)
+                return false;
 
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(Name, Parameters);
-    }
+            return Equals(ev);
+        }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool operator ==(ContractEventDescriptor left, ContractEventDescriptor right)
-    {
-        if (left is null || right is null)
-            return Equals(left, right);
+        public override int GetHashCode()
+        {
+            // Parameters content is compared in Equals; length keeps GetHashCode fast.
+            return HashCode.Combine(Name, Parameters.Length);
+        }
 
-        return left.Equals(right);
-    }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator ==(ContractEventDescriptor left, ContractEventDescriptor right)
+        {
+            if (left is null || right is null)
+                return Equals(left, right);
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool operator !=(ContractEventDescriptor left, ContractEventDescriptor right)
-    {
-        if (left is null || right is null)
-            return !Equals(left, right);
+            return left.Equals(right);
+        }
 
-        return !left.Equals(right);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator !=(ContractEventDescriptor left, ContractEventDescriptor right)
+        {
+            if (left is null || right is null)
+                return !Equals(left, right);
+
+            return !left.Equals(right);
+        }
     }
 }

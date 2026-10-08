@@ -13,118 +13,119 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 
-namespace Neo.Json;
-
-/// <summary>
-/// Represents a JSON string.
-/// </summary>
-public class JString : JToken
+namespace Neo.Json
 {
     /// <summary>
-    /// Gets the value of the JSON token.
+    /// Represents a JSON string.
     /// </summary>
-    public string Value { get; }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="JString"/> class with the specified value.
-    /// </summary>
-    /// <param name="value">The value of the JSON token.</param>
-    public JString(string value)
+    public class JString : JToken
     {
-        Value = value ?? throw new ArgumentNullException(nameof(value));
-    }
+        /// <summary>
+        /// Gets the value of the JSON token.
+        /// </summary>
+        public string Value { get; }
 
-    /// <summary>
-    /// Converts the current JSON token to a boolean value.
-    /// </summary>
-    /// <returns><see langword="true"/> if value is not empty; otherwise, <see langword="false"/>.</returns>
-    public override bool AsBoolean()
-    {
-        return !string.IsNullOrEmpty(Value);
-    }
-
-    public override double AsNumber()
-    {
-        if (string.IsNullOrEmpty(Value)) return 0;
-        return double.TryParse(Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ? result : double.NaN;
-    }
-
-    public override string AsString()
-    {
-        return Value;
-    }
-
-    public override string GetString() => Value;
-
-    public override T AsEnum<T>(T defaultValue = default, bool ignoreCase = false)
-    {
-        try
+        /// <summary>
+        /// Initializes a new instance of the <see cref="JString"/> class with the specified value.
+        /// </summary>
+        /// <param name="value">The value of the JSON token.</param>
+        public JString(string value)
         {
-            return Enum.Parse<T>(Value, ignoreCase);
+            Value = value ?? throw new ArgumentNullException(nameof(value));
         }
-        catch
+
+        /// <summary>
+        /// Converts the current JSON token to a boolean value.
+        /// </summary>
+        /// <returns><see langword="true"/> if value is not empty; otherwise, <see langword="false"/>.</returns>
+        public override bool AsBoolean()
         {
-            return defaultValue;
+            return !string.IsNullOrEmpty(Value);
         }
-    }
 
-    public override T GetEnum<T>(bool ignoreCase = false)
-    {
-        var result = Enum.Parse<T>(Value, ignoreCase);
-        if (!Enum.IsDefined(result)) throw new InvalidCastException();
-        return result;
-    }
-
-    internal override void Write(Utf8JsonWriter writer)
-    {
-        writer.WriteStringValue(Value);
-    }
-
-    public override JToken Clone()
-    {
-        return this;
-    }
-
-    public static implicit operator JString(Enum value)
-    {
-        return new JString(value.ToString());
-    }
-
-    [return: NotNullIfNotNull(nameof(value))]
-    public static implicit operator JString?(string? value)
-    {
-        return value is null ? null : new JString(value);
-    }
-
-    public static bool operator ==(JString? left, JString? right)
-    {
-        if (ReferenceEquals(left, right)) return true;
-        if (left is null || right is null) return false;
-        return left.Value.Equals(right.Value);
-    }
-
-    public static bool operator !=(JString? left, JString? right)
-    {
-        return !(left == right);
-    }
-
-    public override bool Equals(object? obj)
-    {
-        if (obj is null) return false;
-        if (ReferenceEquals(this, obj)) return true;
-        if (obj is JString other)
+        public override double AsNumber()
         {
-            return this == other;
+            if (string.IsNullOrEmpty(Value)) return 0;
+            return double.TryParse(Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ? result : double.NaN;
         }
-        if (obj is string str)
-        {
-            return Value == str;
-        }
-        return false;
-    }
 
-    public override int GetHashCode()
-    {
-        return Value.GetHashCode();
+        public override string AsString()
+        {
+            return Value;
+        }
+
+        public override string GetString() => Value;
+
+        public override T AsEnum<T>(T defaultValue = default, bool ignoreCase = false)
+        {
+            try
+            {
+                return Enum.Parse<T>(Value, ignoreCase);
+            }
+            catch
+            {
+                return defaultValue;
+            }
+        }
+
+        public override T GetEnum<T>(bool ignoreCase = false)
+        {
+            var result = Enum.Parse<T>(Value, ignoreCase);
+            if (!Enum.IsDefined(typeof(T), result)) throw new InvalidCastException();
+            return result;
+        }
+
+        internal override void Write(Utf8JsonWriter writer)
+        {
+            writer.WriteStringValue(Value);
+        }
+
+        public override JToken Clone()
+        {
+            return this;
+        }
+
+        public static implicit operator JString(Enum value)
+        {
+            return new JString(value.ToString());
+        }
+
+        [return: NotNullIfNotNull(nameof(value))]
+        public static implicit operator JString?(string? value)
+        {
+            return value is null ? null : new JString(value);
+        }
+
+        public static bool operator ==(JString? left, JString? right)
+        {
+            if (ReferenceEquals(left, right)) return true;
+            if (left is null || right is null) return false;
+            return left.Value.Equals(right.Value);
+        }
+
+        public static bool operator !=(JString? left, JString? right)
+        {
+            return !(left == right);
+        }
+
+        public override bool Equals(object? obj)
+        {
+            if (obj is null) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            if (obj is JString other)
+            {
+                return this == other;
+            }
+            if (obj is string str)
+            {
+                return Value == str;
+            }
+            return false;
+        }
+
+        public override int GetHashCode()
+        {
+            return Value.GetHashCode();
+        }
     }
 }

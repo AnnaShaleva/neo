@@ -9,23 +9,26 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using System;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using ECPoint = Neo.Cryptography.ECC.ECPoint;
 
-namespace Neo.IO.Caching;
-
-record ECDsaCacheItem(ECPoint Key, ECDsa Value) : IDisposable
+namespace Neo.IO.Caching
 {
-    public void Dispose() => Value.Dispose();
-}
-
-internal class ECDsaCache : FIFOCache<ECPoint, ECDsaCacheItem>
-{
-    public ECDsaCache(int maxCapacity = 20000)
-        : base(maxCapacity, EqualityComparer<ECPoint>.Default) { }
-
-    protected override ECPoint GetKeyForItem(ECDsaCacheItem item)
+    record ECDsaCacheItem(ECPoint Key, ECDsa Value) : IDisposable
     {
-        return item.Key;
+        public void Dispose() => Value.Dispose();
+    }
+
+    internal class ECDsaCache : FIFOCache<ECPoint, ECDsaCacheItem>
+    {
+        public ECDsaCache(int maxCapacity = 20000)
+            : base(maxCapacity, EqualityComparer<ECPoint>.Default) { }
+
+        protected override ECPoint GetKeyForItem(ECDsaCacheItem item)
+        {
+            return item.Key;
+        }
     }
 }

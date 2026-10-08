@@ -12,154 +12,216 @@
 using Neo.Json;
 using Neo.VM;
 using Neo.VM.Types;
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.Linq;
 using System.Numerics;
 using System.Text.Json;
 using Array = Neo.VM.Types.Array;
 using Boolean = Neo.VM.Types.Boolean;
 using Buffer = Neo.VM.Types.Buffer;
 
-namespace Neo.SmartContract;
-
-/// <summary>
-/// A JSON serializer for <see cref="StackItem"/>.
-/// </summary>
-public static class JsonSerializer
+namespace Neo.SmartContract
 {
     /// <summary>
-    /// Serializes a <see cref="StackItem"/> to JSON.
+    /// A JSON serializer for <see cref="StackItem"/>.
     /// </summary>
-    /// <param name="item">The <see cref="StackItem"/> to convert.</param>
-    /// <param name="maxSize">The maximum size of the JSON output.</param>
-    /// <returns>A byte array containing the JSON output.</returns>
-    public static byte[] SerializeToByteArray(StackItem item, uint maxSize)
+    public static class JsonSerializer
     {
-        using MemoryStream ms = new();
-        using Utf8JsonWriter writer = new(ms, new JsonWriterOptions
+        /// <summary>
+        /// Serializes a <see cref="StackItem"/> to a <see cref="JToken"/>.
+        /// </summary>
+        /// <param name="item">The <see cref="StackItem"/> to serialize.</param>
+        /// <returns>The serialized object.</returns>
+        [Obsolete("This method will be removed in the future, do not use.")]
+        public static JToken? Serialize(StackItem item)
         {
-            Indented = false,
-            SkipValidation = false
-        });
-        Stack stack = new();
-        stack.Push(item);
-        while (stack.Count > 0)
-        {
-            switch (stack.Pop())
+            switch (item)
             {
                 case Array array:
-                    writer.WriteStartArray();
-                    stack.Push(JsonTokenType.EndArray);
-                    for (int i = array.Count - 1; i >= 0; i--)
-                        stack.Push(array[i]);
-                    break;
-                case JsonTokenType.EndArray:
-                    writer.WriteEndArray();
-                    break;
-                case StackItem buffer when buffer is ByteString || buffer is Buffer:
-                    writer.WriteStringValue(buffer.GetString());
-                    break;
+                    {
+                        return array.Select(p => Serialize(p)).ToArray();
+                    }
+                case ByteString _:
+                case Buffer _:
+                    {
+                        return item.GetString();
+                    }
                 case Integer num:
                     {
                         var integer = num.GetInteger();
                         if (integer > JNumber.MAX_SAFE_INTEGER || integer < JNumber.MIN_SAFE_INTEGER)
                             throw new InvalidOperationException();
-                        writer.WriteNumberValue((double)integer);
-                        break;
+                        return (double)integer;
                     }
                 case Boolean boolean:
-                    writer.WriteBooleanValue(boolean.GetBoolean());
-                    break;
+                    {
+                        return boolean.GetBoolean();
+                    }
                 case Map map:
-                    writer.WriteStartObject();
-                    stack.Push(JsonTokenType.EndObject);
-                    foreach (var pair in map.Reverse())
                     {
-                        if (pair.Key is not ByteString) throw new FormatException("Key is not a ByteString");
-                        stack.Push(pair.Value);
-                        stack.Push(pair.Key);
-                        stack.Push(JsonTokenType.PropertyName);
+                        var ret = new JObject();
+
+                        foreach (var entry in map)
+                        {
+                            if (!(entry.Key is ByteString)) throw new FormatException("Key is not a ByteString");
+
+                            var key = entry.Key.GetString()!;
+                            var value = Serialize(entry.Value);
+
+                            ret[key] = value;
+                        }
+
+                        return ret;
                     }
-                    break;
-                case JsonTokenType.EndObject:
-                    writer.WriteEndObject();
-                    break;
-                case JsonTokenType.PropertyName:
-                    writer.WritePropertyName(((StackItem)stack.Pop()!).GetString()!);
-                    break;
                 case Null _:
-                    writer.WriteNullValue();
-                    break;
-                default:
-                    throw new InvalidOperationException("Invalid StackItemType");
-            }
-            if (ms.Position + writer.BytesPending > maxSize) throw new InvalidOperationException();
-        }
-        writer.Flush();
-        if (ms.Position > maxSize) throw new InvalidOperationException();
-        return ms.ToArray();
-    }
-
-    /// <summary>
-    /// Deserializes a <see cref="StackItem"/> from <see cref="JToken"/>.
-    /// </summary>
-    /// <param name="engine">The <see cref="ApplicationEngine"/> used.</param>
-    /// <param name="json">The <see cref="JToken"/> to deserialize.</param>
-    /// <param name="limits">The limits for the deserialization.</param>
-    /// <param name="referenceCounter">The <see cref="IReferenceCounter"/> used by the <see cref="StackItem"/>.</param>
-    /// <returns>The deserialized <see cref="StackItem"/>.</returns>
-    public static StackItem Deserialize(ApplicationEngine engine, JToken json, ExecutionEngineLimits limits, IReferenceCounter? referenceCounter = null)
-    {
-        uint maxStackSize = limits.MaxStackSize;
-        return Deserialize(engine, json, ref maxStackSize, referenceCounter);
-    }
-
-    private static StackItem Deserialize(ApplicationEngine engine, JToken? json, ref uint maxStackSize, IReferenceCounter? referenceCounter)
-    {
-        if (maxStackSize-- == 0) throw new FormatException("Max stack size reached");
-        switch (json)
-        {
-            case null:
-                {
-                    return StackItem.Null;
-                }
-            case JArray array:
-                {
-                    List<StackItem> list = new(array.Count);
-                    foreach (JToken? obj in array)
-                        list.Add(Deserialize(engine, obj, ref maxStackSize, referenceCounter));
-                    return new Array(referenceCounter, list);
-                }
-            case JString str:
-                {
-                    return str.Value;
-                }
-            case JNumber num:
-                {
-                    if ((num.Value % 1) != 0) throw new FormatException("Decimal value is not allowed");
-                    return BigInteger.Parse(num.Value.ToString(CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture);
-                }
-            case JBoolean boolean:
-                {
-                    return boolean.Value ? StackItem.True : StackItem.False;
-                }
-            case JObject obj:
-                {
-                    var item = new Map(referenceCounter);
-
-                    foreach (var entry in obj.Properties)
                     {
-                        if (maxStackSize-- == 0) throw new FormatException("Max stack size reached");
-
-                        var key = entry.Key;
-                        var value = Deserialize(engine, entry.Value, ref maxStackSize, referenceCounter);
-
-                        item[key] = value;
+                        return JToken.Null;
                     }
+                default: throw new FormatException($"Invalid StackItemType({item.Type})");
+            }
+        }
 
-                    return item;
+        /// <summary>
+        /// Serializes a <see cref="StackItem"/> to JSON.
+        /// </summary>
+        /// <param name="item">The <see cref="StackItem"/> to convert.</param>
+        /// <param name="maxSize">The maximum size of the JSON output.</param>
+        /// <returns>A byte array containing the JSON output.</returns>
+        public static byte[] SerializeToByteArray(StackItem item, uint maxSize)
+        {
+            using MemoryStream ms = new();
+            using Utf8JsonWriter writer = new(ms, new JsonWriterOptions
+            {
+                Indented = false,
+                SkipValidation = false
+            });
+            Stack stack = new();
+            stack.Push(item);
+            while (stack.Count > 0)
+            {
+                switch (stack.Pop())
+                {
+                    case Array array:
+                        writer.WriteStartArray();
+                        stack.Push(JsonTokenType.EndArray);
+                        for (int i = array.Count - 1; i >= 0; i--)
+                            stack.Push(array[i]);
+                        break;
+                    case JsonTokenType.EndArray:
+                        writer.WriteEndArray();
+                        break;
+                    case StackItem buffer when buffer is ByteString || buffer is Buffer:
+                        writer.WriteStringValue(buffer.GetString());
+                        break;
+                    case Integer num:
+                        {
+                            var integer = num.GetInteger();
+                            if (integer > JNumber.MAX_SAFE_INTEGER || integer < JNumber.MIN_SAFE_INTEGER)
+                                throw new InvalidOperationException();
+                            writer.WriteNumberValue((double)integer);
+                            break;
+                        }
+                    case Boolean boolean:
+                        writer.WriteBooleanValue(boolean.GetBoolean());
+                        break;
+                    case Map map:
+                        writer.WriteStartObject();
+                        stack.Push(JsonTokenType.EndObject);
+                        foreach (var pair in map.Reverse())
+                        {
+                            if (!(pair.Key is ByteString)) throw new FormatException("Key is not a ByteString");
+                            stack.Push(pair.Value);
+                            stack.Push(pair.Key);
+                            stack.Push(JsonTokenType.PropertyName);
+                        }
+                        break;
+                    case JsonTokenType.EndObject:
+                        writer.WriteEndObject();
+                        break;
+                    case JsonTokenType.PropertyName:
+                        writer.WritePropertyName(((StackItem)stack.Pop()!).GetString()!);
+                        break;
+                    case Null _:
+                        writer.WriteNullValue();
+                        break;
+                    default:
+                        throw new InvalidOperationException("Invalid StackItemType");
                 }
-            default: throw new FormatException($"Invalid JTokenType({json.GetType()})");
+                if (ms.Position + writer.BytesPending > maxSize) throw new InvalidOperationException();
+            }
+            writer.Flush();
+            if (ms.Position > maxSize) throw new InvalidOperationException();
+            return ms.ToArray();
+        }
+
+        /// <summary>
+        /// Deserializes a <see cref="StackItem"/> from <see cref="JToken"/>.
+        /// </summary>
+        /// <param name="engine">The <see cref="ApplicationEngine"/> used.</param>
+        /// <param name="json">The <see cref="JToken"/> to deserialize.</param>
+        /// <param name="limits">The limits for the deserialization.</param>
+        /// <returns>The deserialized <see cref="StackItem"/>.</returns>
+        public static StackItem Deserialize(ApplicationEngine engine, JToken json, ExecutionEngineLimits limits)
+        {
+            uint maxStackSize = limits.MaxStackSize;
+            return Deserialize(engine, json, ref maxStackSize);
+        }
+
+        private static StackItem Deserialize(ApplicationEngine engine, JToken? json, ref uint maxStackSize)
+        {
+            if (maxStackSize-- == 0) throw new FormatException("Max stack size reached");
+            switch (json)
+            {
+                case null:
+                    {
+                        return StackItem.Null;
+                    }
+                case JArray array:
+                    {
+                        List<StackItem> list = new(array.Count);
+                        foreach (JToken? obj in array)
+                            list.Add(Deserialize(engine, obj, ref maxStackSize));
+                        return new Array(list);
+                    }
+                case JString str:
+                    {
+                        return str.Value;
+                    }
+                case JNumber num:
+                    {
+                        if ((num.Value % 1) != 0) throw new FormatException("Decimal value is not allowed");
+                        if (engine.IsHardforkEnabled(Hardfork.HF_Basilisk))
+                        {
+                            return BigInteger.Parse(num.Value.ToString(CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture);
+                        }
+                        return (BigInteger)num.Value;
+                    }
+                case JBoolean boolean:
+                    {
+                        return boolean.Value ? StackItem.True : StackItem.False;
+                    }
+                case JObject obj:
+                    {
+                        var item = new Map();
+
+                        foreach (var entry in obj.Properties)
+                        {
+                            if (maxStackSize-- == 0) throw new FormatException("Max stack size reached");
+
+                            var key = entry.Key;
+                            var value = Deserialize(engine, entry.Value, ref maxStackSize);
+
+                            item[key] = value;
+                        }
+
+                        return item;
+                    }
+                default: throw new FormatException($"Invalid JTokenType({json.GetType()})");
+            }
         }
     }
 }

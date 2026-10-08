@@ -11,62 +11,87 @@
 
 using Akka.IO;
 using Akka.TestKit.MsTest;
-using Neo.Extensions.IO;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Neo.Extensions;
 using Neo.Network.P2P;
 using Neo.Network.P2P.Capabilities;
 using Neo.Network.P2P.Payloads;
 using System.Net;
+using System.Threading;
 
-namespace Neo.UnitTests.Network.P2P;
-
-[TestClass]
-public class UT_RemoteNode : TestKit
+namespace Neo.UnitTests.Network.P2P
 {
-    private static NeoSystem _system = null!;
-
-    public UT_RemoteNode()
-        : base($"remote-node-mailbox {{ mailbox-type: \"{typeof(RemoteNodeMailbox).AssemblyQualifiedName}\" }}")
+    [TestClass]
+    public class UT_RemoteNode : TestKit
     {
-    }
+        private static NeoSystem _system;
 
-    [ClassInitialize]
-    public static void TestSetup(TestContext ctx)
-    {
-        _system = TestBlockchain.GetSystem();
-    }
+        public UT_RemoteNode()
+            : base($"remote-node-mailbox {{ mailbox-type: \"{typeof(RemoteNodeMailbox).AssemblyQualifiedName}\" }}")
+        {
+        }
 
-    [TestMethod]
-    public void RemoteNode_Test_Abort_DifferentNetwork()
-    {
-        var connectionTestProbe = CreateTestProbe();
-        var remoteNodeActor = ActorOfAsTestActorRef(() => new RemoteNode(_system, new LocalNode(_system, new()), connectionTestProbe, null!, null!, new ChannelsConfig()));
+        [ClassInitialize]
+        public static void TestSetup(TestContext ctx)
+        {
+            _system = TestBlockchain.GetSystem();
+        }
 
-        var msg = Message.Create(MessageCommand.Version, VersionPayload.Create(ProtocolSettings.Default with { Network = 2 }, new(), "".PadLeft(1024, '0'), new ServerCapability(NodeCapabilityType.TcpServer, 25)));
+        [TestMethod]
+        public void RemoteNode_Test_Abort_DifferentNetwork()
+        {
+            var connectionTestProbe = CreateTestProbe();
+            var remoteNodeActor = ActorOfAsTestActorRef(() => new RemoteNode(_system, new LocalNode(_system), connectionTestProbe, null, null, new ChannelsConfig()));
 
-        var testProbe = CreateTestProbe();
-        testProbe.Send(remoteNodeActor, new Tcp.Received((ByteString)msg.ToArray()));
+            var msg = Message.Create(MessageCommand.Version, new VersionPayload
+            {
+                UserAgent = "".PadLeft(1024, '0'),
+                Nonce = 1,
+                Network = 2,
+                Timestamp = 5,
+                Version = 6,
+                Capabilities =
+                [
+                    new ServerCapability(NodeCapabilityType.TcpServer, 25)
+                ]
+            });
 
-        connectionTestProbe.ExpectMsg<Tcp.Abort>(cancellationToken: CancellationToken.None);
-    }
+            var testProbe = CreateTestProbe();
+            testProbe.Send(remoteNodeActor, new Tcp.Received((ByteString)msg.ToArray()));
 
-    [TestMethod]
-    public void RemoteNode_Test_Accept_IfSameNetwork()
-    {
-        var connectionTestProbe = CreateTestProbe();
-        var remoteNodeActor = ActorOfAsTestActorRef(() =>
-            new RemoteNode(_system,
-                new LocalNode(_system, new()),
-                connectionTestProbe,
-                new IPEndPoint(IPAddress.Parse("192.168.1.2"), 8080), new IPEndPoint(IPAddress.Parse("192.168.1.1"), 8080), new ChannelsConfig()));
+            connectionTestProbe.ExpectMsg<Tcp.Abort>(cancellationToken: CancellationToken.None);
+        }
 
-        var msg = Message.Create(MessageCommand.Version, VersionPayload.Create(TestProtocolSettings.Default, new(), "Unit Test".PadLeft(1024, '0'), new ServerCapability(NodeCapabilityType.TcpServer, 25)));
+        [TestMethod]
+        public void RemoteNode_Test_Accept_IfSameNetwork()
+        {
+            var connectionTestProbe = CreateTestProbe();
+            var remoteNodeActor = ActorOfAsTestActorRef(() =>
+                new RemoteNode(_system,
+                    new LocalNode(_system),
+                    connectionTestProbe,
+                    new IPEndPoint(IPAddress.Parse("192.168.1.2"), 8080), new IPEndPoint(IPAddress.Parse("192.168.1.1"), 8080), new ChannelsConfig()));
 
-        var testProbe = CreateTestProbe();
-        testProbe.Send(remoteNodeActor, new Tcp.Received((ByteString)msg.ToArray()));
+            var msg = Message.Create(MessageCommand.Version, new VersionPayload()
+            {
+                UserAgent = "Unit Test".PadLeft(1024, '0'),
+                Nonce = 1,
+                Network = TestProtocolSettings.Default.Network,
+                Timestamp = 5,
+                Version = 6,
+                Capabilities =
+                [
+                    new ServerCapability(NodeCapabilityType.TcpServer, 25)
+                ]
+            });
 
-        var verackMessage = connectionTestProbe.ExpectMsg<Tcp.Write>(cancellationToken: CancellationToken.None);
+            var testProbe = CreateTestProbe();
+            testProbe.Send(remoteNodeActor, new Tcp.Received((ByteString)msg.ToArray()));
 
-        //Verack
-        Assert.HasCount(3, verackMessage.Data);
+            var verackMessage = connectionTestProbe.ExpectMsg<Tcp.Write>(cancellationToken: CancellationToken.None);
+
+            //Verack
+            Assert.HasCount(3, verackMessage.Data);
+        }
     }
 }

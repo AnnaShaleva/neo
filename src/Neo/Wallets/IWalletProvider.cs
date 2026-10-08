@@ -9,21 +9,24 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.Wallets;
+using System;
 
-/// <summary>
-/// A provider for obtaining wallet instance.
-/// </summary>
-public interface IWalletProvider
+namespace Neo.Wallets
 {
     /// <summary>
-    /// Triggered when a wallet is opened or closed.
+    /// A provider for obtaining wallet instance.
     /// </summary>
-    event EventHandler<Wallet?> WalletChanged;
+    public interface IWalletProvider
+    {
+        /// <summary>
+        /// Triggered when a wallet is opened or closed.
+        /// </summary>
+        event EventHandler<Wallet?> WalletChanged;
 
-    /// <summary>
-    /// Get the currently opened <see cref="Wallet"/> instance.
-    /// </summary>
-    /// <returns>The opened wallet. Or <see langword="null"/> if no wallet is opened.</returns>
-    Wallet? GetWallet();
+        /// <summary>
+        /// Get the currently opened <see cref="Wallet"/> instance.
+        /// </summary>
+        /// <returns>The opened wallet. Or <see langword="null"/> if no wallet is opened.</returns>
+        Wallet? GetWallet();
+    }
 }

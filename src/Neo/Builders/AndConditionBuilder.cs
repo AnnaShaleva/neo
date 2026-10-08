@@ -11,78 +11,80 @@
 
 using Neo.Cryptography.ECC;
 using Neo.Network.P2P.Payloads.Conditions;
+using System;
 
-namespace Neo.Builders;
-
-public sealed class AndConditionBuilder
+namespace Neo.Builders
 {
-    private readonly AndCondition _condition = new() { Expressions = [] };
-
-    private AndConditionBuilder() { }
-
-    public static AndConditionBuilder CreateEmpty()
+    public sealed class AndConditionBuilder
     {
-        return new AndConditionBuilder();
-    }
+        private readonly AndCondition _condition = new() { Expressions = [] };
 
-    public AndConditionBuilder And(Action<AndConditionBuilder> config)
-    {
-        var acb = new AndConditionBuilder();
-        config(acb);
+        private AndConditionBuilder() { }
 
-        _condition.Expressions = [.. _condition.Expressions, acb.Build()];
+        public static AndConditionBuilder CreateEmpty()
+        {
+            return new AndConditionBuilder();
+        }
 
-        return this;
-    }
+        public AndConditionBuilder And(Action<AndConditionBuilder> config)
+        {
+            var acb = new AndConditionBuilder();
+            config(acb);
 
-    public AndConditionBuilder Or(Action<OrConditionBuilder> config)
-    {
-        var ocb = OrConditionBuilder.CreateEmpty();
-        config(ocb);
+            _condition.Expressions = [.. _condition.Expressions, acb.Build()];
 
-        _condition.Expressions = [.. _condition.Expressions, ocb.Build()];
+            return this;
+        }
 
-        return this;
-    }
+        public AndConditionBuilder Or(Action<OrConditionBuilder> config)
+        {
+            var ocb = OrConditionBuilder.CreateEmpty();
+            config(ocb);
 
-    public AndConditionBuilder Boolean(bool expression)
-    {
-        _condition.Expressions = [.. _condition.Expressions, new BooleanCondition { Expression = expression }];
-        return this;
-    }
+            _condition.Expressions = [.. _condition.Expressions, ocb.Build()];
 
-    public AndConditionBuilder CalledByContract(UInt160 hash)
-    {
-        _condition.Expressions = [.. _condition.Expressions, new CalledByContractCondition { Hash = hash }];
-        return this;
-    }
+            return this;
+        }
 
-    public AndConditionBuilder CalledByEntry()
-    {
-        _condition.Expressions = [.. _condition.Expressions, new CalledByEntryCondition()];
-        return this;
-    }
+        public AndConditionBuilder Boolean(bool expression)
+        {
+            _condition.Expressions = [.. _condition.Expressions, new BooleanCondition { Expression = expression }];
+            return this;
+        }
 
-    public AndConditionBuilder CalledByGroup(ECPoint publicKey)
-    {
-        _condition.Expressions = [.. _condition.Expressions, new CalledByGroupCondition { Group = publicKey }];
-        return this;
-    }
+        public AndConditionBuilder CalledByContract(UInt160 hash)
+        {
+            _condition.Expressions = [.. _condition.Expressions, new CalledByContractCondition { Hash = hash }];
+            return this;
+        }
 
-    public AndConditionBuilder Group(ECPoint publicKey)
-    {
-        _condition.Expressions = [.. _condition.Expressions, new GroupCondition() { Group = publicKey }];
-        return this;
-    }
+        public AndConditionBuilder CalledByEntry()
+        {
+            _condition.Expressions = [.. _condition.Expressions, new CalledByEntryCondition()];
+            return this;
+        }
 
-    public AndConditionBuilder ScriptHash(UInt160 scriptHash)
-    {
-        _condition.Expressions = [.. _condition.Expressions, new ScriptHashCondition() { Hash = scriptHash }];
-        return this;
-    }
+        public AndConditionBuilder CalledByGroup(ECPoint publicKey)
+        {
+            _condition.Expressions = [.. _condition.Expressions, new CalledByGroupCondition { Group = publicKey }];
+            return this;
+        }
 
-    public AndCondition Build()
-    {
-        return _condition;
+        public AndConditionBuilder Group(ECPoint publicKey)
+        {
+            _condition.Expressions = [.. _condition.Expressions, new GroupCondition() { Group = publicKey }];
+            return this;
+        }
+
+        public AndConditionBuilder ScriptHash(UInt160 scriptHash)
+        {
+            _condition.Expressions = [.. _condition.Expressions, new ScriptHashCondition() { Hash = scriptHash }];
+            return this;
+        }
+
+        public AndCondition Build()
+        {
+            return _condition;
+        }
     }
 }

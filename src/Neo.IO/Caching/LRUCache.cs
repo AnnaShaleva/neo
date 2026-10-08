@@ -9,14 +9,17 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.IO.Caching;
+using System.Collections.Generic;
 
-public abstract class LRUCache<TKey, TValue>(int maxCapacity, IEqualityComparer<TKey>? comparer = null)
-    : Cache<TKey, TValue>(maxCapacity, comparer) where TKey : notnull where TValue : notnull
+namespace Neo.IO.Caching
 {
-    protected override void OnAccess(CacheItem item)
+    public abstract class LRUCache<TKey, TValue>(int maxCapacity, IEqualityComparer<TKey>? comparer = null)
+        : Cache<TKey, TValue>(maxCapacity, comparer) where TKey : notnull
     {
-        item.Unlink();
-        Head.Add(item);
+        protected override void OnAccess(CacheItem item)
+        {
+            item.Unlink();
+            Head.Add(item);
+        }
     }
 }

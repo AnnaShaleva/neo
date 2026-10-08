@@ -12,71 +12,74 @@
 using Neo.Persistence;
 using Neo.SmartContract;
 using Neo.SmartContract.Native;
+using System;
+using System.Collections.Generic;
 
-namespace Neo.Extensions.SmartContract;
-
-public static class ContractStateExtensions
+namespace Neo.Extensions
 {
-    /// <summary>
-    /// Get Storage value by storage map key.
-    /// </summary>
-    /// <param name="contractState"></param>
-    /// <param name="snapshot">Snapshot of the database.</param>
-    /// <param name="storageKey">Key in the storage map.</param>
-    /// <returns>Storage value of the item.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="contractState"/> or <paramref name="snapshot"/> is null</exception>
-    public static StorageItem? GetStorage(this ContractState contractState, IReadOnlyStore snapshot, byte[] storageKey)
+    public static class ContractStateExtensions
     {
-        ArgumentNullException.ThrowIfNull(contractState);
-
-        ArgumentNullException.ThrowIfNull(snapshot);
-
-        storageKey ??= [];
-
-        if (snapshot.TryGet(StorageKey.CreateSearchPrefix(contractState.Id, storageKey), out var value))
+        /// <summary>
+        /// Get Storage value by storage map key.
+        /// </summary>
+        /// <param name="contractState"></param>
+        /// <param name="snapshot">Snapshot of the database.</param>
+        /// <param name="storageKey">Key in the storage map.</param>
+        /// <returns>Storage value of the item.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="contractState"/> or <paramref name="snapshot"/> is null</exception>
+        public static StorageItem? GetStorage(this ContractState contractState, IReadOnlyStore snapshot, byte[] storageKey)
         {
-            return value;
+            ArgumentNullException.ThrowIfNull(contractState);
+            ArgumentNullException.ThrowIfNull(snapshot);
+
+            storageKey ??= [];
+
+            if (snapshot.TryGet(StorageKey.CreateSearchPrefix(contractState.Id, storageKey), out var value))
+            {
+                return value;
+            }
+
+            return null;
         }
 
-        return null;
-    }
+        /// <summary>
+        /// All storage items stored in the given contract.
+        /// </summary>
+        /// <param name="contractState"></param>
+        /// <param name="snapshot">Snapshot of the database.</param>
+        /// <param name="prefix">Prefix of the key.</param>
+        /// <param name="seekDirection"></param>
+        /// <param name="skip">Number of entries to skip.</param>
+        /// <returns>All storage of the given contract.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="contractState"/> or <paramref name="snapshot"/> is null</exception>
+        public static IEnumerable<(StorageKey Key, StorageItem Value)> FindStorage(this ContractState contractState, IReadOnlyStore snapshot, byte[]? prefix = null, SeekDirection seekDirection = SeekDirection.Forward, int skip = 0)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(skip);
+            ArgumentNullException.ThrowIfNull(contractState);
+            ArgumentNullException.ThrowIfNull(snapshot);
+            prefix ??= [];
 
-    /// <summary>
-    /// All storage items stored in the given contract.
-    /// </summary>
-    /// <param name="contractState"></param>
-    /// <param name="snapshot">Snapshot of the database.</param>
-    /// <param name="prefix">Prefix of the key.</param>
-    /// <param name="seekDirection"></param>
-    /// <returns>All storage of the given contract.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="contractState"/> or <paramref name="snapshot"/> is null</exception>
-    public static IEnumerable<(StorageKey Key, StorageItem Value)> FindStorage(this ContractState contractState, IReadOnlyStore snapshot, byte[]? prefix = null, SeekDirection seekDirection = SeekDirection.Forward)
-    {
-        ArgumentNullException.ThrowIfNull(contractState);
+            return snapshot.Find(StorageKey.CreateSearchPrefix(contractState.Id, prefix), seekDirection, skip);
+        }
 
-        ArgumentNullException.ThrowIfNull(snapshot);
+        /// <summary>
+        /// All storage items stored in the given contract.
+        /// </summary>
+        /// <param name="contractManagement"></param>
+        /// <param name="snapshot">Snapshot of the database.</param>
+        /// <param name="prefix">Prefix of the key.</param>
+        /// <param name="contractId">Id of the contract.</param>
+        /// <param name="seekDirection"></param>
+        /// <param name="skip">Number of entries to skip.</param>
+        /// <returns>All storage of the given contract.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is null</exception>
+        public static IEnumerable<(StorageKey Key, StorageItem Value)> FindContractStorage(this ContractManagement contractManagement, IReadOnlyStore snapshot, int contractId, byte[]? prefix = null, SeekDirection seekDirection = SeekDirection.Forward, int skip = 0)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(skip);
+            ArgumentNullException.ThrowIfNull(snapshot);
+            prefix ??= [];
 
-        prefix ??= [];
-
-        return snapshot.Find(StorageKey.CreateSearchPrefix(contractState.Id, prefix), seekDirection);
-    }
-
-    /// <summary>
-    /// All storage items stored in the given contract.
-    /// </summary>
-    /// <param name="contractManagement"></param>
-    /// <param name="snapshot">Snapshot of the database.</param>
-    /// <param name="prefix">Prefix of the key.</param>
-    /// <param name="contractId">Id of the contract.</param>
-    /// <param name="seekDirection"></param>
-    /// <returns>All storage of the given contract.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is null</exception>
-    public static IEnumerable<(StorageKey Key, StorageItem Value)> FindContractStorage(this ContractManagement contractManagement, IReadOnlyStore snapshot, int contractId, byte[]? prefix = null, SeekDirection seekDirection = SeekDirection.Forward)
-    {
-        ArgumentNullException.ThrowIfNull(snapshot);
-
-        prefix ??= [];
-
-        return snapshot.Find(StorageKey.CreateSearchPrefix(contractId, prefix), seekDirection);
+            return snapshot.Find(StorageKey.CreateSearchPrefix(contractId, prefix), seekDirection, skip);
+        }
     }
 }

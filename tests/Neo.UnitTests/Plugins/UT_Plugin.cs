@@ -9,211 +9,172 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.Ledger;
 using Neo.Plugins;
+using System;
 using System.Reflection;
 
-namespace Neo.UnitTests.Plugins;
-
-[TestClass]
-public class UT_Plugin
+namespace Neo.UnitTests.Plugins
 {
-    private static readonly Lock s_locker = new();
-
-    [TestInitialize]
-    public void TestInitialize()
+    [TestClass]
+    public class UT_Plugin
     {
-        ClearEventHandlers();
-    }
+        private static readonly object s_locker = new();
 
-    [TestCleanup]
-    public void TestCleanup()
-    {
-        ClearEventHandlers();
-    }
-
-    private static void ClearEventHandlers()
-    {
-        ClearEventHandler("Committing");
-        ClearEventHandler("Committed");
-    }
-
-    private static void ClearEventHandler(string eventName)
-    {
-        var eventInfo = typeof(Blockchain).GetEvent(eventName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-        if (eventInfo == null)
+        [TestInitialize]
+        public void TestInitialize()
         {
-            return;
+            ClearEventHandlers();
         }
 
-        var fields = typeof(Blockchain).GetFields(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
-        foreach (var field in fields)
+        [TestCleanup]
+        public void TestCleanup()
         {
-            if (field.FieldType == typeof(MulticastDelegate) || field.FieldType.BaseType == typeof(MulticastDelegate))
+            ClearEventHandlers();
+        }
+
+        private static void ClearEventHandlers()
+        {
+            ClearEventHandler("Committing");
+            ClearEventHandler("Committed");
+        }
+
+        private static void ClearEventHandler(string eventName)
+        {
+            var eventInfo = typeof(Blockchain).GetEvent(eventName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (eventInfo == null)
             {
-                var eventDelegate = (MulticastDelegate)field.GetValue(null)!;
-                if (eventDelegate != null && field.Name.Contains(eventName))
+                return;
+            }
+
+            var fields = typeof(Blockchain).GetFields(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);
+            foreach (var field in fields)
+            {
+                if (field.FieldType == typeof(MulticastDelegate) || field.FieldType.BaseType == typeof(MulticastDelegate))
                 {
-                    foreach (var handler in eventDelegate.GetInvocationList())
+                    var eventDelegate = (MulticastDelegate)field.GetValue(null);
+                    if (eventDelegate != null && field.Name.Contains(eventName))
                     {
-                        eventInfo.RemoveEventHandler(null, handler);
+                        foreach (var handler in eventDelegate.GetInvocationList())
+                        {
+                            eventInfo.RemoveEventHandler(null, handler);
+                        }
+                        break;
                     }
-                    break;
                 }
             }
         }
-    }
 
-    [TestMethod]
-    public void TestGetConfigFile()
-    {
-        var pp = new TestPlugin();
-        var file = pp.ConfigFile;
-        Assert.EndsWith("config.json", file);
-    }
-
-    [TestMethod]
-    public void TestGetName()
-    {
-        var pp = new TestPlugin();
-        Assert.AreEqual("TestPlugin", pp.Name);
-    }
-
-    [TestMethod]
-    public void TestGetVersion()
-    {
-        var pp = new TestPlugin();
-        try
+        [TestMethod]
+        public void TestGetConfigFile()
         {
+            var pp = new TestPlugin();
+            var file = pp.ConfigFile;
+            Assert.EndsWith("config.json", file);
+        }
+
+        [TestMethod]
+        public void TestGetName()
+        {
+            var pp = new TestPlugin();
+            Assert.AreEqual("TestPlugin", pp.Name);
+        }
+
+        [TestMethod]
+        public void TestGetVersion()
+        {
+            var pp = new TestPlugin();
             _ = pp.Version.ToString();
         }
-        catch (Exception ex)
+
+        [TestMethod]
+        public void TestSendMessage()
         {
-            Assert.Fail($"Should not throw but threw {ex}");
+            lock (s_locker)
+            {
+                Plugin.Plugins.Clear();
+                Assert.IsFalse(Plugin.SendMessage("hey1"));
+
+                var lp = new TestPlugin();
+                Assert.IsTrue(Plugin.SendMessage("hey2"));
+            }
         }
-    }
 
-    [TestMethod]
-    public void TestSendMessage()
-    {
-        lock (s_locker)
+        [TestMethod]
+        public void TestGetConfiguration()
         {
-            Plugin.Plugins.Clear();
-            Assert.IsFalse(Plugin.SendMessage("hey1"));
+            var pp = new TestPlugin();
+            Assert.AreEqual("PluginConfiguration", pp.TestGetConfiguration().Key);
+        }
 
+        [TestMethod]
+        public void TestOnException()
+        {
             _ = new TestPlugin();
-            Assert.IsTrue(Plugin.SendMessage("hey2"));
-        }
-    }
+            // Ensure no exception is thrown
+            Blockchain.InvokeCommitting(null, null, null, null);
+            Blockchain.InvokeCommitted(null, null);
 
-    [TestMethod]
-    public void TestGetConfiguration()
-    {
-        var pp = new TestPlugin();
-        Assert.AreEqual("PluginConfiguration", pp.TestGetConfiguration().Key);
-    }
+            // Register TestNonPlugin that throws exceptions
+            _ = new TestNonPlugin();
 
-    [TestMethod]
-    public void TestOnException()
-    {
-        _ = new TestPlugin();
-        // Ensure no exception is thrown
-        try
-        {
-            Blockchain.InvokeCommitting(null!, null!, null!, null!);
-            Blockchain.InvokeCommitted(null!, null!);
-        }
-        catch (Exception ex)
-        {
-            Assert.Fail($"InvokeCommitting or InvokeCommitted threw an exception: {ex.Message}");
+            // Ensure exception is thrown
+            Assert.ThrowsExactly<NotImplementedException>(() => Blockchain.InvokeCommitting(null, null, null, null));
+            Assert.ThrowsExactly<NotImplementedException>(() => Blockchain.InvokeCommitted(null, null));
         }
 
-        // Register TestNonPlugin that throws exceptions
-        _ = new TestNonPlugin();
-
-        // Ensure exception is thrown
-        Assert.ThrowsExactly<NotImplementedException>(() =>
-       {
-           Blockchain.InvokeCommitting(null!, null!, null!, null!);
-       });
-
-        Assert.ThrowsExactly<NotImplementedException>(() =>
-       {
-           Blockchain.InvokeCommitted(null!, null!);
-       });
-    }
-
-    [TestMethod]
-    public void TestOnPluginStopped()
-    {
-        var pp = new TestPlugin();
-        Assert.IsFalse(pp.IsStopped);
-        // Ensure no exception is thrown
-        try
+        [TestMethod]
+        public void TestOnPluginStopped()
         {
-            Blockchain.InvokeCommitting(null!, null!, null!, null!);
-            Blockchain.InvokeCommitted(null!, null!);
-        }
-        catch (Exception ex)
-        {
-            Assert.Fail($"InvokeCommitting or InvokeCommitted threw an exception: {ex.Message}");
+            var pp = new TestPlugin();
+            Assert.IsFalse(pp.IsStopped);
+            // Ensure no exception is thrown
+            Blockchain.InvokeCommitting(null, null, null, null);
+            Blockchain.InvokeCommitted(null, null);
+
+            Assert.IsTrue(pp.IsStopped);
         }
 
-        Assert.IsTrue(pp.IsStopped);
-    }
+        [TestMethod]
+        public void TestOnPluginStopOnException()
+        {
+            // pp will stop on exception.
+            var pp = new TestPlugin();
+            Assert.IsFalse(pp.IsStopped);
+            // Ensure no exception is thrown
+            Blockchain.InvokeCommitting(null, null, null, null);
+            Blockchain.InvokeCommitted(null, null);
 
-    [TestMethod]
-    public void TestOnPluginStopOnException()
-    {
-        // pp will stop on exception.
-        var pp = new TestPlugin();
-        Assert.IsFalse(pp.IsStopped);
-        // Ensure no exception is thrown
-        try
-        {
-            Blockchain.InvokeCommitting(null!, null!, null!, null!);
-            Blockchain.InvokeCommitted(null!, null!);
-        }
-        catch (Exception ex)
-        {
-            Assert.Fail($"InvokeCommitting or InvokeCommitted threw an exception: {ex.Message}");
-        }
+            Assert.IsTrue(pp.IsStopped);
 
-        Assert.IsTrue(pp.IsStopped);
+            // pp2 will not stop on exception.
+            var pp2 = new TestPlugin(UnhandledExceptionPolicy.Ignore);
+            Assert.IsFalse(pp2.IsStopped);
+            // Ensure no exception is thrown
+            Blockchain.InvokeCommitting(null, null, null, null);
+            Blockchain.InvokeCommitted(null, null);
 
-        // pp2 will not stop on exception.
-        var pp2 = new TestPlugin(UnhandledExceptionPolicy.Ignore);
-        Assert.IsFalse(pp2.IsStopped);
-        // Ensure no exception is thrown
-        try
-        {
-            Blockchain.InvokeCommitting(null!, null!, null!, null!);
-            Blockchain.InvokeCommitted(null!, null!);
-        }
-        catch (Exception ex)
-        {
-            Assert.Fail($"InvokeCommitting or InvokeCommitted threw an exception: {ex.Message}");
+            Assert.IsFalse(pp2.IsStopped);
         }
 
-        Assert.IsFalse(pp2.IsStopped);
-    }
-
-    [TestMethod]
-    public void TestOnNodeStopOnPluginException()
-    {
-        // node will stop on pp exception.
-        var pp = new TestPlugin(UnhandledExceptionPolicy.StopNode);
-        Assert.IsFalse(pp.IsStopped);
-        Assert.ThrowsExactly<NotImplementedException>(() =>
+        [TestMethod]
+        public void TestOnNodeStopOnPluginException()
         {
-            Blockchain.InvokeCommitting(null!, null!, null!, null!);
-        });
+            // node will stop on pp exception.
+            var pp = new TestPlugin(UnhandledExceptionPolicy.StopNode);
+            Assert.IsFalse(pp.IsStopped);
+            Assert.ThrowsExactly<NotImplementedException>(() =>
+            {
+                Blockchain.InvokeCommitting(null, null, null, null);
+            });
 
-        Assert.ThrowsExactly<NotImplementedException>(() =>
-        {
-            Blockchain.InvokeCommitted(null!, null!);
-        });
+            Assert.ThrowsExactly<NotImplementedException>(() =>
+            {
+                Blockchain.InvokeCommitted(null, null);
+            });
 
-        Assert.IsFalse(pp.IsStopped);
+            Assert.IsFalse(pp.IsStopped);
+        }
     }
 }

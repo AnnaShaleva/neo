@@ -9,11 +9,12 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.Plugins;
-
-public enum UnhandledExceptionPolicy : byte
+namespace Neo.Plugins
 {
-    Ignore = 0,
-    StopPlugin = 1,
-    StopNode = 2,
+    public enum UnhandledExceptionPolicy : byte
+    {
+        Ignore = 0,
+        StopPlugin = 1,
+        StopNode = 2,
+    }
 }

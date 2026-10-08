@@ -9,88 +9,88 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-#pragma warning disable CA1822
-
+using System;
 using System.Runtime.CompilerServices;
 
-namespace Neo.SmartContract;
-
-sealed class ContractTaskMethodBuilder
+namespace Neo.SmartContract
 {
-    public ContractTask Task => field ??= new ContractTask();
-
-    public static ContractTaskMethodBuilder Create() => new();
-
-    public void SetException(Exception exception)
+    sealed class ContractTaskMethodBuilder
     {
-        Task.GetAwaiter().SetException(exception);
+        public ContractTask Task => field ??= new ContractTask();
+
+        public static ContractTaskMethodBuilder Create() => new();
+
+        public void SetException(Exception exception)
+        {
+            Task.GetAwaiter().SetException(exception);
+        }
+
+        public void SetResult()
+        {
+            Task.GetAwaiter().SetResult();
+        }
+
+        public void AwaitOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
+            where TAwaiter : INotifyCompletion
+            where TStateMachine : IAsyncStateMachine
+        {
+            awaiter.OnCompleted(stateMachine.MoveNext);
+        }
+
+        public void AwaitUnsafeOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
+            where TAwaiter : ICriticalNotifyCompletion
+            where TStateMachine : IAsyncStateMachine
+        {
+            awaiter.OnCompleted(stateMachine.MoveNext);
+        }
+
+        public void Start<TStateMachine>(ref TStateMachine stateMachine) where TStateMachine : IAsyncStateMachine
+        {
+            stateMachine.MoveNext();
+        }
+
+        public void SetStateMachine(IAsyncStateMachine stateMachine)
+        {
+        }
     }
 
-    public void SetResult()
+    sealed class ContractTaskMethodBuilder<T>
     {
-        Task.GetAwaiter().SetResult();
-    }
+        public ContractTask<T> Task => field ??= new ContractTask<T>();
 
-    public void AwaitOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
-        where TAwaiter : INotifyCompletion
-        where TStateMachine : IAsyncStateMachine
-    {
-        awaiter.OnCompleted(stateMachine.MoveNext);
-    }
+        public static ContractTaskMethodBuilder<T> Create() => new();
 
-    public void AwaitUnsafeOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
-        where TAwaiter : ICriticalNotifyCompletion
-        where TStateMachine : IAsyncStateMachine
-    {
-        awaiter.OnCompleted(stateMachine.MoveNext);
-    }
+        public void SetException(Exception exception)
+        {
+            Task.GetAwaiter().SetException(exception);
+        }
 
-    public void Start<TStateMachine>(ref TStateMachine stateMachine) where TStateMachine : IAsyncStateMachine
-    {
-        stateMachine.MoveNext();
-    }
+        public void SetResult(T result)
+        {
+            ((ContractTaskAwaiter<T>)Task.GetAwaiter()).SetResult(result);
+        }
 
-    public void SetStateMachine(IAsyncStateMachine stateMachine)
-    {
-    }
-}
+        public void AwaitOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
+            where TAwaiter : INotifyCompletion
+            where TStateMachine : IAsyncStateMachine
+        {
+            awaiter.OnCompleted(stateMachine.MoveNext);
+        }
 
-sealed class ContractTaskMethodBuilder<T>
-{
-    public ContractTask<T> Task => field ??= new ContractTask<T>();
+        public void AwaitUnsafeOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
+            where TAwaiter : ICriticalNotifyCompletion
+            where TStateMachine : IAsyncStateMachine
+        {
+            awaiter.OnCompleted(stateMachine.MoveNext);
+        }
 
-    public static ContractTaskMethodBuilder<T> Create() => new();
+        public void Start<TStateMachine>(ref TStateMachine stateMachine) where TStateMachine : IAsyncStateMachine
+        {
+            stateMachine.MoveNext();
+        }
 
-    public void SetException(Exception exception)
-    {
-        Task.GetAwaiter().SetException(exception);
-    }
-
-    public void SetResult(T result)
-    {
-        ((ContractTaskAwaiter<T>)Task.GetAwaiter()).SetResult(result);
-    }
-
-    public void AwaitOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
-        where TAwaiter : INotifyCompletion
-        where TStateMachine : IAsyncStateMachine
-    {
-        awaiter.OnCompleted(stateMachine.MoveNext);
-    }
-
-    public void AwaitUnsafeOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
-        where TAwaiter : ICriticalNotifyCompletion
-        where TStateMachine : IAsyncStateMachine
-    {
-        awaiter.OnCompleted(stateMachine.MoveNext);
-    }
-
-    public void Start<TStateMachine>(ref TStateMachine stateMachine) where TStateMachine : IAsyncStateMachine
-    {
-        stateMachine.MoveNext();
-    }
-
-    public void SetStateMachine(IAsyncStateMachine stateMachine)
-    {
+        public void SetStateMachine(IAsyncStateMachine stateMachine)
+        {
+        }
     }
 }

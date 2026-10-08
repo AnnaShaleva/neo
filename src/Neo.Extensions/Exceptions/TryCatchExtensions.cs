@@ -9,131 +9,134 @@
 // Redistribution and use in source and binary forms with or without
 // modifications are permitted.
 
-namespace Neo.Exceptions;
+using System;
 
-internal static class TryCatchExtensions
+namespace Neo.Extensions.Exceptions
 {
-    public static TSource TryCatch<TSource>(this TSource obj, Action<TSource?> action)
-        where TSource : class?
+    internal static class TryCatchExtensions
     {
-        try
+        public static TSource TryCatch<TSource>(this TSource obj, Action<TSource?> action)
+            where TSource : class?
         {
-            action(obj);
-        }
-        catch
-        {
-        }
-
-        return obj;
-    }
-
-    public static TSource TryCatch<TSource, TException>(this TSource obj, Action<TSource> action, Action<TSource?, TException>? onError = default)
-        where TSource : notnull
-        where TException : Exception
-    {
-        try
-        {
-            action(obj);
-        }
-        catch (TException ex)
-        {
-            onError?.Invoke(obj, ex);
-        }
-
-        return obj;
-    }
-
-    public static TResult TryCatch<TSource, TException, TResult>(this TSource obj, Func<TSource, TResult> func, Func<TSource, TException, TResult>? onError = default)
-        where TSource : notnull
-        where TException : Exception
-    {
-        try
-        {
-            return func(obj);
-        }
-        catch (TException ex)
-        {
-            if (onError == null) throw;
-            return onError(obj, ex);
-        }
-    }
-
-    public static TSource TryCatchThrow<TSource, TException>(this TSource obj, Action<TSource?> action)
-        where TSource : class?
-        where TException : Exception
-    {
-        try
-        {
-            action(obj);
+            try
+            {
+                action(obj);
+            }
+            catch
+            {
+            }
 
             return obj;
         }
-        catch (TException)
-        {
-            throw;
-        }
-    }
 
-    public static TResult TryCatchThrow<TSource, TException, TResult>(this TSource obj, Func<TSource, TResult> func)
-        where TSource : notnull
-        where TException : Exception
-    {
-        try
+        public static TSource TryCatch<TSource, TException>(this TSource obj, Action<TSource> action, Action<TSource?, TException>? onError = default)
+            where TSource : notnull
+            where TException : Exception
         {
-            return func(obj);
-        }
-        catch (TException)
-        {
-            throw;
-        }
-    }
-
-    public static TSource TryCatchThrow<TSource, TException>(this TSource obj, Action<TSource?> action, string? errorMessage = default)
-        where TSource : class?
-        where TException : Exception, new()
-    {
-        try
-        {
-            action(obj);
+            try
+            {
+                action(obj);
+            }
+            catch (TException ex)
+            {
+                onError?.Invoke(obj, ex);
+            }
 
             return obj;
         }
-        catch (TException innerException)
+
+        public static TResult TryCatch<TSource, TException, TResult>(this TSource obj, Func<TSource, TResult> func, Func<TSource, TException, TResult>? onError = default)
+            where TSource : notnull
+            where TException : Exception
         {
-            if (string.IsNullOrEmpty(errorMessage))
-                throw;
-            else
+            try
             {
-                if (Activator.CreateInstance(typeof(TException), errorMessage, innerException) is not TException ex)
+                return func(obj);
+            }
+            catch (TException ex)
+            {
+                if (onError == null) throw;
+                return onError(obj, ex);
+            }
+        }
+
+        public static TSource TryCatchThrow<TSource, TException>(this TSource obj, Action<TSource?> action)
+            where TSource : class?
+            where TException : Exception
+        {
+            try
+            {
+                action(obj);
+
+                return obj;
+            }
+            catch (TException)
+            {
+                throw;
+            }
+        }
+
+        public static TResult TryCatchThrow<TSource, TException, TResult>(this TSource obj, Func<TSource, TResult> func)
+            where TSource : notnull
+            where TException : Exception
+        {
+            try
+            {
+                return func(obj);
+            }
+            catch (TException)
+            {
+                throw;
+            }
+        }
+
+        public static TSource TryCatchThrow<TSource, TException>(this TSource obj, Action<TSource?> action, string? errorMessage = default)
+            where TSource : class?
+            where TException : Exception, new()
+        {
+            try
+            {
+                action(obj);
+
+                return obj;
+            }
+            catch (TException innerException)
+            {
+                if (string.IsNullOrEmpty(errorMessage))
                     throw;
                 else
-                    throw ex;
+                {
+                    if (Activator.CreateInstance(typeof(TException), errorMessage, innerException) is not TException ex)
+                        throw;
+                    else
+                        throw ex;
+                }
+
             }
-
         }
-    }
 
-    public static TResult? TryCatchThrow<TSource, TException, TResult>(this TSource obj, Func<TSource?, TResult?> func, string? errorMessage = default)
-        where TSource : class?
-        where TException : Exception
-        where TResult : class?
-    {
-        try
+        public static TResult? TryCatchThrow<TSource, TException, TResult>(this TSource obj, Func<TSource?, TResult?> func, string? errorMessage = default)
+            where TSource : class?
+            where TException : Exception
+            where TResult : class?
         {
-            return func(obj);
-        }
-        catch (TException innerException)
-        {
-            if (string.IsNullOrEmpty(errorMessage))
-                throw;
-            else
+            try
             {
-                if (Activator.CreateInstance(typeof(TException), errorMessage, innerException) is not TException ex)
+                return func(obj);
+            }
+            catch (TException innerException)
+            {
+                if (string.IsNullOrEmpty(errorMessage))
                     throw;
                 else
-                    throw ex;
-            }
+                {
+                    if (Activator.CreateInstance(typeof(TException), errorMessage, innerException) is not TException ex)
+                        throw;
+                    else
+                        throw ex;
+                }
 
+            }
         }
     }
 }
